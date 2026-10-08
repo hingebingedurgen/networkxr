@@ -33,7 +33,7 @@ jobs:
         with:
           python-version: "3.12"
       # The extension is built against Python's stable ABI (abi3), so one
-      # wheel per platform serves every Python version from 3.10 up.
+      # wheel per platform serves every Python version from 3.11 up.
       - uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}

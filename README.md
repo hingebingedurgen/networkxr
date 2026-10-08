@@ -248,7 +248,7 @@ variable `NETWORKXR_POLICY` sets the starting policy.
 
 ## Building from source
 
-Needs Rust (1.82 or newer), Python 3.10 or newer and
+Needs Rust (1.82 or newer), Python 3.11 or newer and
 [maturin](https://www.maturin.rs/).
 
 ```sh

@@ -8,7 +8,7 @@ description = "A drop-in speed-up for NetworkX: the same API, with the hot algor
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE", "LICENSES/NetworkX.txt"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = ["networkx>=3.6"]
 dynamic = ["version"]
 keywords = ["graph", "network", "networkx", "rust", "algorithms"]

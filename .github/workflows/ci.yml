@@ -27,7 +27,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ["3.10", "3.13"]
+        python: ["3.11", "3.13"]
+        exclude:
+          - python: "3.11"
+            networkx: "3.7"
         # Results are matched to these NetworkX releases exactly. Add each new
         # release here; the conformance run below shows what it changed.
         networkx: ["3.6.1", "3.7"]

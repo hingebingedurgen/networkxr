@@ -16,6 +16,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 networkxr-core = { path = "../networkxr-core" }
-# abi3-py310: build against Python's stable ABI, so one wheel per platform
-# works on every Python from 3.10 up.
-pyo3 = { version = "0.29", features = ["extension-module", "abi3-py310", "multiple-pymethods"] }
+# abi3-py311: build against Python's stable ABI, so one wheel per platform
+# works on every Python from 3.11 up.
+pyo3 = { version = "0.29", features = ["extension-module", "abi3-py311", "multiple-pymethods"] }
