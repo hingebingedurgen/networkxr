@@ -1,0 +1,35 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "networkxr"
+description = "A drop-in speed-up for NetworkX: the same API, with the hot algorithms running in Rust."
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE", "LICENSES/NetworkX.txt"]
+requires-python = ">=3.10"
+dependencies = ["networkx>=3.6"]
+dynamic = ["version"]
+keywords = ["graph", "network", "networkx", "rust", "algorithms"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.optional-dependencies]
+# pagerank needs numpy, as it does in NetworkX.
+default = ["numpy>=1.25", "scipy>=1.11"]
+test = ["pytest>=7", "numpy>=1.25", "scipy>=1.11"]
+
+[tool.maturin]
+manifest-path = "crates/networkxr-py/Cargo.toml"
+python-source = "python"
+module-name = "networkxr._core"
+features = ["pyo3/extension-module"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

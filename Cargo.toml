@@ -1,0 +1,16 @@
+# A Cargo "workspace" groups several crates (Rust packages) that are built
+# together and share one Cargo.lock and one target/ directory.
+[workspace]
+resolver = "2"
+members = ["crates/networkxr-core", "crates/networkxr-py"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "BSD-3-Clause"
+rust-version = "1.82"
+
+[profile.release]
+# Optimise across crate boundaries. Slower to compile, faster to run.
+lto = "fat"
+codegen-units = 1

@@ -1,0 +1,11 @@
+[package]
+name = "networkxr-core"
+description = "Graph algorithms on a compact integer-indexed graph. The pure-Rust engine behind networkxr."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# rayon: data parallelism. Turns `.iter()` into `.par_iter()`.
+rayon = "1.10"
