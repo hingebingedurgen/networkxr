@@ -183,32 +183,33 @@ Reading the table:
 
 The per-node algorithms are where NetworkX stops being usable well before a
 graph is large, because their cost grows with nodes times edges.
-`python benchmarks/bench.py --scaling` runs them at growing sizes:
+`python benchmarks/bench.py --scaling --budget 100000` runs them at growing
+sizes:
 
 | function | nodes | edges | NetworkX | networkxrs | speed-up |
 |---|---:|---:|---:|---:|---:|
-| betweenness_centrality | 2,000 | 9,991 | 4.45 s | 20 ms | 219x |
-| betweenness_centrality | 5,000 | 24,834 | 30.2 s | 127 ms | 237x |
-| betweenness_centrality | 10,000 | 49,853 | ~2.3 min | 550 ms | ~246x |
-| betweenness_centrality | 20,000 | 99,903 | ~9.8 min | 2.26 s | ~259x |
-| betweenness_centrality | 50,000 | 249,748 | ~82 min | 15.3 s | ~323x |
-| betweenness_centrality (weighted) | 2,000 | 9,991 | 10.8 s | 67 ms | 161x |
-| betweenness_centrality (weighted) | 5,000 | 24,834 | 74.5 s | 414 ms | 180x |
-| betweenness_centrality (weighted) | 10,000 | 49,853 | ~5.5 min | 1.71 s | ~192x |
-| betweenness_centrality (weighted) | 20,000 | 99,903 | ~25 min | 7.76 s | ~192x |
-| betweenness_centrality (weighted) | 50,000 | 249,748 | ~3.4 h | 62.8 s | ~197x |
-| closeness_centrality | 2,000 | 9,991 | 1.02 s | 1.4 ms | 746x |
-| closeness_centrality | 5,000 | 24,834 | 8.26 s | 4.6 ms | 1805x |
-| closeness_centrality | 10,000 | 49,853 | 31.7 s | 15 ms | 2096x |
-| closeness_centrality | 20,000 | 99,903 | ~2.6 min | 57 ms | ~2689x |
-| closeness_centrality | 50,000 | 249,748 | ~19 min | 362 ms | ~3181x |
+| betweenness_centrality | 2,000 | 9,991 | 4.46 s | 21.0 ms | 212x |
+| betweenness_centrality | 5,000 | 24,834 | 30.97 s | 127.6 ms | 243x |
+| betweenness_centrality | 10,000 | 49,853 | 2.3 min | 542.2 ms | 250x |
+| betweenness_centrality | 20,000 | 99,903 | 9.6 min | 2.21 s | 260x |
+| betweenness_centrality | 50,000 | 249,748 | 77.8 min | 15.07 s | 309x |
+| betweenness_centrality (weighted) | 2,000 | 9,991 | 10.94 s | 71.4 ms | 153x |
+| betweenness_centrality (weighted) | 5,000 | 24,834 | 74.03 s | 422.9 ms | 175x |
+| betweenness_centrality (weighted) | 10,000 | 49,853 | 5.4 min | 1.72 s | 190x |
+| betweenness_centrality (weighted) | 20,000 | 99,903 | 23.6 min | 7.83 s | 181x |
+| betweenness_centrality (weighted) | 50,000 | 249,748 | 3.2 h | 62.49 s | 185x |
+| closeness_centrality | 2,000 | 9,991 | 1.03 s | 1.4 ms | 714x |
+| closeness_centrality | 5,000 | 24,834 | 8.23 s | 4.6 ms | 1796x |
+| closeness_centrality | 10,000 | 49,853 | 31.69 s | 14.6 ms | 2168x |
+| closeness_centrality | 20,000 | 99,903 | 2.4 min | 57.6 ms | 2468x |
+| closeness_centrality | 50,000 | 249,748 | 17.0 min | 358.0 ms | 2851x |
 
-A `~` marks a NetworkX time that was not measured but estimated, by running
-the search from 50 of the nodes and multiplying up, because the real call
-would take minutes to hours. Those rows were not checked against NetworkX;
-the rows without a `~` were, and match exactly. Every networkxrs time is
-measured. `--budget` sets how long a NetworkX call may take before it is
-estimated instead.
+Every time in this table is measured, none estimated, and every result was
+checked against NetworkX's and matches exactly. The whole run takes about
+six hours, nearly all of it NetworkX. Without `--budget 100000` the script
+finishes in about ten minutes by estimating the slow NetworkX calls: it runs
+the search from 50 of the nodes, multiplies up, and marks the figure with a
+`~`. Those estimates came out 2 to 13% above the measured times here.
 
 ### Usage patterns
 
