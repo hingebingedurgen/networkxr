@@ -290,9 +290,11 @@ in `docs/READING_GUIDE.md`.
   runs the Rust and Python
   tests and NetworkX's suite on Linux, macOS and Windows. `release.yml`
   builds wheels on a version tag and publishes them to PyPI; it needs the
-  repository registered as a trusted publisher on PyPI first. Neither has
-  been run yet.
-- **macOS and Windows.** Everything above was built and tested on Linux only.
+  repository registered as a trusted publisher on PyPI first. `ci.yml` passes
+  on all three systems with Python 3.12 to 3.14; `release.yml` has not been
+  run yet.
+- **Benchmarks.** The timings above are from one Linux machine. Nothing has
+  been measured on macOS or Windows.
 
 ## What is not done
 
