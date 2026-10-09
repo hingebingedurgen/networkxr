@@ -20,6 +20,7 @@ Every result is checked against NetworkX's before its time is reported.
 """
 
 import argparse
+import gc
 import math
 import os
 import platform
@@ -190,6 +191,17 @@ def main():
     }
     largest = max(networkx.connected_components(graphs["medium"]), key=len)
     graphs["medium_connected"] = graphs["medium"].subgraph(largest).copy()
+
+    # The graphs are millions of Python objects. Python's garbage collector
+    # periodically re-examines every object it tracks, and with a heap this
+    # size one such pass takes longer than most of the calls being timed. It
+    # lands on whichever call happens to be running: on Python 3.14, the
+    # second of two identical NetworkX calls took three times as long as the
+    # first for this reason alone. `freeze` tells the collector to leave
+    # everything that exists now out of its passes, so the timings below
+    # measure the calls and not the collector.
+    gc.collect()
+    gc.freeze()
 
     rows = []
     for label, kind, call in BENCHMARKS:

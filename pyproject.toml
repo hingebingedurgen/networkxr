@@ -8,7 +8,7 @@ description = "A drop-in speed-up for NetworkX: the same API, with the hot algor
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE", "LICENSES/NetworkX.txt"]
-requires-python = ">=3.12"
+requires-python = ">=3.12,!=3.14.1"
 dependencies = ["networkx>=3.6"]
 dynamic = ["version"]
 keywords = ["graph", "network", "networkx", "rust", "algorithms"]
@@ -24,6 +24,15 @@ classifiers = [
 # pagerank needs numpy, as it does in NetworkX.
 default = ["numpy>=1.25", "scipy>=1.11"]
 test = ["pytest>=7", "numpy>=1.25", "scipy>=1.11"]
+
+# `uv sync` installs these along with the project itself.
+[dependency-groups]
+dev = ["pytest>=7", "numpy>=1.25", "scipy>=1.11", "rustworkx"]
+
+[tool.uv]
+# Rebuild the extension when the Rust sources change, not only when
+# pyproject.toml does.
+cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "crates/**/*.rs" }, { file = "crates/**/Cargo.toml" }]
 
 [tool.maturin]
 manifest-path = "crates/networkxr-py/Cargo.toml"

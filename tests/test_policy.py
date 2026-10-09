@@ -26,12 +26,14 @@ def snapshots_expensive(monkeypatch):
     """Make a snapshot cost far more than any test spends in NetworkX, so
     that "does not build" tests check the rules and not the speed of the
     machine they happen to run on."""
+    monkeypatch.setattr(_dispatch, "_calibrated", True)  # keep the value set here
     monkeypatch.setattr(_dispatch, "BUILD_SECONDS_PER_UNIT", 1.0)
 
 
 @pytest.fixture
 def snapshots_free(monkeypatch):
     """The opposite: any time at all spent in NetworkX justifies a snapshot."""
+    monkeypatch.setattr(_dispatch, "_calibrated", True)
     monkeypatch.setattr(_dispatch, "BUILD_SECONDS_PER_UNIT", 1e-12)
     monkeypatch.setattr(_dispatch, "RUST_SECONDS_PER_UNIT", 1e-12)
 
@@ -174,6 +176,17 @@ def test_off_policy_never_uses_rust(big):
         assert counts["bfs_edges"] == {"rust": 0, "networkx": 1}
     finally:
         networkxr.set_policy("adaptive")
+
+
+def test_calibration_measures_plausible_rates(monkeypatch):
+    monkeypatch.setattr(_dispatch, "_calibrated", False)
+    monkeypatch.setattr(_dispatch, "BUILD_SECONDS_PER_UNIT", 123.0)
+    monkeypatch.setattr(_dispatch, "RUST_SECONDS_PER_UNIT", 123.0)
+    networkxr.has_path(networkx.path_graph(5), 0, 4)  # any call that has to decide
+    assert _dispatch._calibrated
+    # Between a nanosecond and ten microseconds per unit on any real machine.
+    assert 1e-9 < _dispatch.BUILD_SECONDS_PER_UNIT < 1e-5
+    assert 1e-10 < _dispatch.RUST_SECONDS_PER_UNIT < 1e-5
 
 
 def test_set_policy_rejects_unknown_names():

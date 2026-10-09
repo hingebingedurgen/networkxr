@@ -139,13 +139,53 @@ def get_policy():
 # rough, and only need to be right to within a small factor: they decide
 # *when* to build a snapshot, never what is returned.
 
-#: Seconds per unit to build a snapshot and read its weights once. Adjusted
-#: at run time from the builds that actually happen.
+#: Seconds per unit to build a snapshot and read its weights once. This
+#: starting value is replaced by a measurement the first time it matters (see
+#: `_calibrate`) and refined by every large build after that.
 BUILD_SECONDS_PER_UNIT = 2.0e-7
 
 #: Seconds per unit for one linear-time pass in Rust, including turning the
-#: result back into Python objects.
+#: result back into Python objects. Measured and refined the same way.
 RUST_SECONDS_PER_UNIT = 3.0e-8
+
+_calibrated = False
+
+
+def _calibrate():
+    """Measure this machine once, replacing the two starting rates above.
+
+    The rates are compared with *measured* NetworkX time, so they have to be
+    in this machine's seconds. Fixed constants cannot be: on a machine several
+    times faster than the one they were chosen on, NetworkX's time shrinks,
+    the constants do not, and a snapshot never looks worth building.
+
+    The measurement builds a snapshot of a small made-up graph and runs one
+    search on it, which takes a few milliseconds. Large graphs cost more per
+    unit than a small one, because they do not fit in the processor's cache,
+    hence the factors.
+    """
+    global _calibrated, BUILD_SECONDS_PER_UNIT, RUST_SECONDS_PER_UNIT
+    _calibrated = True
+    n, degree = 4000, 6
+    G = _nx.Graph()
+    G.add_edges_from((u, (u + k) % n) for u in range(n) for k in range(1, degree // 2 + 1))
+    units = n + n * degree
+    build = search = float("inf")
+    for _ in range(3):  # the best of three, to shrug off a stray pause
+        start = perf_counter()
+        snap = Snapshot(G._adj, None)
+        middle = perf_counter()
+        snap.bfs_edges(0, False, None)
+        build, search = min(build, middle - start), min(search, perf_counter() - middle)
+    BUILD_SECONDS_PER_UNIT = 4.0 * build / units
+    RUST_SECONDS_PER_UNIT = 2.0 * search / units
+
+
+def _learn(name, seconds, units):
+    """Refine one of the rates from a real, large enough, timed operation."""
+    if units >= 50_000:
+        globals()[name] = 0.5 * globals()[name] + 0.5 * seconds / units
+
 
 #: A search is "large" if it reaches this fraction of the nodes.
 REACH_FRACTION = 0.3
@@ -237,7 +277,6 @@ def _lookup(G):
 
 def _build(G, cache):
     """Build, store and return the snapshot of ``G`` (False if it fails)."""
-    global BUILD_SECONDS_PER_UNIT
     start = perf_counter()
     try:
         snap = Snapshot(G._adj, G._pred if G.is_directed() else None)
@@ -245,12 +284,9 @@ def _build(G, cache):
         snap = False
     cache[_SNAPSHOT] = snap
     if snap:
+        # The factor 1.5 allows for reading the weights afterwards.
         units = snap.number_of_nodes + 2 * snap.number_of_edges
-        if units >= 50_000:
-            # Learn this machine's speed from builds big enough to time. The
-            # factor 1.5 allows for reading the weights afterwards.
-            measured = 1.5 * (perf_counter() - start) / units
-            BUILD_SECONDS_PER_UNIT = 0.5 * BUILD_SECONDS_PER_UNIT + 0.5 * measured
+        _learn("BUILD_SECONDS_PER_UNIT", 1.5 * (perf_counter() - start), units)
     return snap
 
 
@@ -297,6 +333,8 @@ def _decide(G, cache, tier, args, kwargs):
             tier = tier(G, *args, **kwargs)
         except TypeError:
             return None  # the arguments do not fit; NetworkX will say so
+    if not _calibrated and tier is not GLOBAL:
+        _calibrate()
     if tier is GLOBAL or _worth(G, cache, cache.get(_DEBT, 0.0), BUILD_SECONDS_PER_UNIT):
         return _build(G, cache)
     if tier is LOCAL:
@@ -404,10 +442,14 @@ def accelerate_stream(nx_func):
                 snap = _build(G, cache)
             if not snap:
                 return None
+            start = perf_counter()
             try:
-                return impl(snap, G, *args, **kwargs)(done)
+                rest = impl(snap, G, *args, **kwargs)(done)
             except Fallback:
                 return None
+            units = snap.number_of_nodes + 2 * snap.number_of_edges
+            _learn("RUST_SECONDS_PER_UNIT", perf_counter() - start, units)
+            return rest
 
         def stream(G, args, kwargs):
             # A generator's body runs when the caller first asks for an item,
@@ -435,6 +477,8 @@ def accelerate_stream(nx_func):
                     yield from rest
                     return
 
+            if not _calibrated:
+                _calibrate()
             source = nx_func(G, *args, **kwargs)
             done = 0  # items handed out so far
             spent = 0.0  # seconds NetworkX took to produce them

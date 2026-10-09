@@ -120,7 +120,7 @@ Known differences:
 
 ## How fast
 
-Measured on a 2-core cloud VM (x86-64), NetworkX 3.6.1, Python 3.13.
+Measured on a 16-core Apple Silicon MacBook Pro, NetworkX 3.7, Python 3.14.
 Reproduce with `python benchmarks/bench.py`; timings vary from run to run.
 
 *Cold* is the first call on a graph, which includes building the Rust
@@ -130,71 +130,86 @@ per node.
 
 | function | nodes | NetworkX | cold | warm | speed-up (cold) |
 |---|---:|---:|---:|---:|---:|
-| connected_components | 200,000 | 787 ms | 311 ms | 37 ms | 3x |
-| bfs_edges | 200,000 | 2.37 s | 2.08 s | 161 ms | 1x |
-| dfs_preorder_nodes | 200,000 | 2.54 s | 1.55 s | 131 ms | 2x |
-| single_source_shortest_path_length | 200,000 | 825 ms | 279 ms | 56 ms | 3x |
-| single_source_shortest_path | 200,000 | 2.06 s | 383 ms | 149 ms | 5x |
-| shortest_path (one pair) | 200,000 | 1.2 ms | 730 µs | 218 µs | 2x |
-| single_source_dijkstra_path_length | 200,000 | 4.67 s | 798 ms | 356 ms | 6x |
-| single_source_dijkstra | 200,000 | 7.30 s | 973 ms | 543 ms | 7x |
-| dijkstra_path (one pair) | 200,000 | 2.10 s | 760 ms | 123 ms | 3x |
-| single_source_bellman_ford_path_length | 200,000 | 11.72 s | 808 ms | 454 ms | 15x |
-| minimum_spanning_tree | 200,000 | 8.77 s | 1.34 s | 2.71 s | 7x |
-| pagerank | 200,000 | 5.02 s | 535 ms | 98 ms | 9x |
-| degree_centrality | 200,000 | 96 ms | 88 ms | 85 ms | 1x |
-| strongly_connected_components | 200,000 | 2.05 s | 255 ms | 74 ms | 8x |
-| pagerank (directed) | 200,000 | 1.92 s | 344 ms | 73 ms | 6x |
-| topological_sort | 200,000 | 1.29 s | 305 ms | 40 ms | 4x |
-| dag_longest_path | 200,000 | 3.98 s | 601 ms | 158 ms | 7x |
-| cycle_basis | 2,000 | 73 ms | 29 ms | 27 ms | 3x |
-| betweenness_centrality | 2,000 | 12.29 s | 166 ms | 163 ms | 74x |
-| betweenness_centrality (weighted) | 2,000 | 39.23 s | 621 ms | 672 ms | 63x |
-| closeness_centrality | 2,000 | 3.21 s | 80 ms | 77 ms | 40x |
-| all_pairs_shortest_path_length | 2,000 | 2.62 s | 337 ms | 320 ms | 8x |
-| all_pairs_dijkstra_path_length | 2,000 | 20.25 s | 905 ms | 907 ms | 22x |
-| average_shortest_path_length | 2,000 | 3.16 s | 79 ms | 80 ms | 40x |
+| connected_components | 200,000 | 150 ms | 48 ms | 6.7 ms | 3x |
+| bfs_edges | 200,000 | 228 ms | 230 ms | 41 ms | 1x |
+| dfs_preorder_nodes | 200,000 | 324 ms | 169 ms | 28 ms | 2x |
+| single_source_shortest_path_length | 200,000 | 210 ms | 57 ms | 9.4 ms | 4x |
+| single_source_shortest_path | 200,000 | 257 ms | 77 ms | 24 ms | 3x |
+| shortest_path (one pair) | 200,000 | 441 µs | 244 µs | 114 µs | 2x |
+| single_source_dijkstra_path_length | 200,000 | 935 ms | 183 ms | 105 ms | 5x |
+| single_source_dijkstra | 200,000 | 953 ms | 199 ms | 124 ms | 5x |
+| dijkstra_path (one pair) | 200,000 | 152 ms | 133 ms | 41 ms | 1x |
+| single_source_bellman_ford_path_length | 200,000 | 1.87 s | 185 ms | 113 ms | 10x |
+| minimum_spanning_tree | 200,000 | 1.47 s | 462 ms | 336 ms | 3x |
+| pagerank | 200,000 | 705 ms | 94 ms | 31 ms | 7x |
+| degree_centrality | 200,000 | 33 ms | 29 ms | 4.0 ms | 1x |
+| strongly_connected_components | 200,000 | 266 ms | 55 ms | 15 ms | 5x |
+| pagerank (directed) | 200,000 | 342 ms | 70 ms | 22 ms | 5x |
+| topological_sort | 200,000 | 218 ms | 47 ms | 6.7 ms | 5x |
+| dag_longest_path | 200,000 | 655 ms | 87 ms | 32 ms | 8x |
+| cycle_basis | 2,000 | 22 ms | 9.9 ms | 7.5 ms | 2x |
+| betweenness_centrality | 2,000 | 4.54 s | 33 ms | 31 ms | 139x |
+| betweenness_centrality (weighted) | 2,000 | 10.97 s | 63 ms | 61 ms | 175x |
+| closeness_centrality | 2,000 | 1.04 s | 7.4 ms | 5.9 ms | 140x |
+| all_pairs_shortest_path_length | 2,000 | 1.05 s | 73 ms | 63 ms | 14x |
+| all_pairs_dijkstra_path_length | 2,000 | 5.85 s | 122 ms | 115 ms | 48x |
+| average_shortest_path_length | 2,000 | 1.09 s | 7.0 ms | 5.7 ms | 157x |
 
 Reading the table:
 
-- The big wins are where NetworkX does a lot of work per edge in Python:
-  weighted searches, PageRank, and anything that runs one search per node
-  (those also use every CPU core).
-- A single linear pass such as BFS gains less on a cold call, because
-  reading the graph out of NetworkX's dicts is itself a sizeable fraction of
-  what NetworkX's own pass costs. `bfs_edges` cold is the extreme: it is a
-  generator, so it starts in NetworkX (see below) and gains almost nothing
-  until the second call.
+- The biggest wins are the algorithms that run one search per node
+  (betweenness, closeness, all pairs). They are pure Rust loops and use every
+  CPU core.
+- Next come single passes where NetworkX does a lot of work per edge in
+  Python: weighted searches, PageRank, longest paths.
+- A single cheap pass such as BFS gains less on a cold call, because reading
+  the graph out of NetworkX's dicts (about 40 ms for the 200,000-node graph)
+  is a sizeable fraction of what NetworkX's own pass costs. The warm column
+  shows the algorithm without that cost.
+- `bfs_edges` cold gains nothing. It is a generator, so it starts in
+  NetworkX (see below), and NetworkX's BFS produces nearly all of its items
+  early and then spends most of its time finishing without producing any,
+  which leaves no point at which to switch.
+- One-pair `dijkstra_path` and `degree_centrality` are left to NetworkX on a
+  first call by design: NetworkX may answer them faster than a snapshot can
+  be built.
 - `minimum_spanning_tree` spends most of its remaining time building the
-  result graph in Python; its warm figure above is slower than its cold one
-  only through noise from that.
-- `degree_centrality` is already one quick pass in NetworkX, so it is left
-  there unless a snapshot happens to exist.
+  result graph in Python.
+- Weighted searches are slower than unweighted ones by more than the
+  algorithm explains (105 ms against 9 ms warm) because every call reads the
+  weights afresh from the graph's attribute dicts.
 
 Whole usage patterns, on the 200,000-node graph, including ones that are
 awkward for this design:
 
 | pattern | calls | NetworkX | networkxr | speed-up |
 |---|---:|---:|---:|---:|
-| add an edge, then `has_path` | 300 | 212 ms | 166 ms | 1.3x |
-| `shortest_path_length`, random pairs | 3,000 | 1.57 s | 754 ms | 2.1x |
-| `dijkstra_path_length`, random pairs | 30 | 56.3 s | 8.2 s | 6.8x |
-| 2-step neighbourhood of each node | 20,000 | 1.24 s | 925 ms | 1.3x |
-| first item of `bfs_edges` | 20,000 | 65 ms | 117 ms | 0.6x |
-| Dijkstra from each of several sources | 10 | 39.4 s | 4.2 s | 9.5x |
+| add an edge, then `has_path` | 300 | 41 ms | 36 ms | 1.1x |
+| `shortest_path_length`, random pairs | 3,000 | 341 ms | 122 ms | 2.8x |
+| `dijkstra_path_length`, random pairs | 30 | 10.5 s | 1.73 s | 6.0x |
+| 2-step neighbourhood of each node | 20,000 | 301 ms | 177 ms | 1.7x |
+| first item of `bfs_edges` | 20,000 | 24 ms | 44 ms | 0.5x |
+| Dijkstra from each of several sources | 10 | 7.62 s | 930 ms | 8.2x |
 
 The one row below 1x is the per-call overhead: 20,000 calls that each do
-three microseconds of work in NetworkX cost about six here.
+about one microsecond of work in NetworkX cost about two here.
 
-For comparison, [rustworkx](https://www.rustworkx.org/) 0.18 on the same
-graphs, once they are in its own format: single-source Dijkstra took about
-the same time as networkxr's warm figure, betweenness and closeness two to
-four times longer on this 2-core machine, and the spanning tree far less
-(80 ms; it returns the tree in its own format, where networkxr builds a
-NetworkX graph). Converting a NetworkX graph with rustworkx's own converter
-took 5 to 6 seconds for the 200,000-node graph, against about 0.2 seconds
-for a snapshot here. The benchmark script prints these if rustworkx is
-installed.
+For comparison, [rustworkx](https://www.rustworkx.org/) on the same graphs,
+once they are in its own format: single-source Dijkstra took 81 ms against
+networkxr's 105 ms warm, connected components 40 ms against 6.7 ms,
+betweenness 45 ms against 31 ms, closeness 32 ms against 5.9 ms, and the
+spanning tree 32 ms against 336 ms (it returns the tree in its own format,
+where networkxr builds a NetworkX graph). Converting the 200,000-node
+NetworkX graph with rustworkx's own converter took 450 to 730 ms, against
+about 40 ms for a snapshot here. The benchmark script prints these if
+rustworkx is installed.
+
+A note on measuring: the benchmark holds millions of Python objects, and on
+a heap that size one pass of Python's garbage collector takes longer than
+most of the calls being timed and lands on whichever call is running. The
+script freezes the heap after building its graphs (`gc.freeze()`) so that
+both libraries are timed without it. A program holding large NetworkX graphs
+pays that cost whichever library it calls.
 
 ## How it works
 
@@ -293,8 +308,8 @@ in `docs/READING_GUIDE.md`.
   repository registered as a trusted publisher on PyPI first. `ci.yml` passes
   on all three systems with Python 3.12 to 3.14; `release.yml` has not been
   run yet.
-- **Benchmarks.** The timings above are from one Linux machine. Nothing has
-  been measured on macOS or Windows.
+- **Benchmarks.** The timings above are from one Mac. Nothing has been
+  measured on Windows, and only an earlier version on Linux.
 
 ## What is not done
 
