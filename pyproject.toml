@@ -27,7 +27,7 @@ test = ["pytest>=7", "numpy>=1.25", "scipy>=1.11"]
 
 # `uv sync` installs these along with the project itself.
 [dependency-groups]
-dev = ["pytest>=7", "numpy>=1.25", "scipy>=1.11", "rustworkx"]
+dev = ["pytest>=7", "numpy>=1.25", "scipy>=1.11", "rustworkx", "rustnx>=0.1.0a3"]
 
 [tool.uv]
 # Rebuild the extension when the Rust sources change, not only when

@@ -3,13 +3,12 @@
 //! Ports of `networkx.pagerank` and functions in
 //! `networkx.algorithms.centrality`.
 
-use std::collections::VecDeque;
 use std::fmt;
 
 use rayon::prelude::*;
 
 use crate::graph::{Direction, EdgeId, Graph, NodeId};
-use crate::shortest_paths::{bfs, dijkstra, MinQueue};
+use crate::shortest_paths::{bfs, bfs_totals, dijkstra, MinQueue};
 use crate::workspace::Workspace;
 
 // ---------------------------------------------------------------------------
@@ -192,80 +191,82 @@ pub fn degree_centrality(g: &Graph, kind: DegreeKind) -> Vec<f64> {
 // Betweenness
 // ---------------------------------------------------------------------------
 
+/// Marks a node the unweighted search has not reached.
+const NO_LEVEL: u32 = u32::MAX;
+
 /// Working memory for one single-source pass of Brandes' algorithm.
 ///
 /// Betweenness runs one shortest-path search per node. Allocating these
 /// arrays afresh for each search would dominate the running time on sparse
 /// graphs, so each worker thread makes one `Scratch` and reuses it.
+///
+/// Between passes every array is back in its starting state. A pass cleans
+/// up only the entries it wrote, which are those of the nodes in `order`, so
+/// a search that reaches few nodes costs little however large the graph is.
 struct Scratch {
     /// Number of shortest paths from the source to each node.
     sigma: Vec<f64>,
-    /// Predecessors of each node on shortest paths from the source.
-    preds: Vec<Vec<NodeId>>,
-    /// Nodes in the order their distance became final.
+    /// Nodes in the order their distance became final. The unweighted
+    /// search also uses it as its queue.
     order: Vec<NodeId>,
     /// Dependency of the source on each node (Brandes' delta).
     delta: Vec<f64>,
     // Unweighted search.
+    /// Distance from the source, or `NO_LEVEL`.
     level: Vec<u32>,
-    fifo: VecDeque<NodeId>,
     // Weighted search.
+    /// Predecessors of each node on shortest paths from the source.
+    preds: Vec<Vec<NodeId>>,
     seen: Vec<f64>,
     done: Vec<bool>,
     queue: MinQueue,
 }
 
 impl Scratch {
-    fn new(n: usize) -> Self {
+    fn new(n: usize, weighted: bool) -> Self {
+        // Only one of the two searches is used, so give the other's arrays
+        // no memory. An `if` is an expression: it produces a value.
+        let (unweighted_n, weighted_n) = if weighted { (0, n) } else { (n, 0) };
         Self {
             sigma: vec![0.0; n],
-            preds: vec![Vec::new(); n],
             order: Vec::with_capacity(n),
             delta: vec![0.0; n],
-            level: vec![u32::MAX; n],
-            fifo: VecDeque::new(),
-            seen: vec![f64::INFINITY; n],
-            done: vec![false; n],
+            level: vec![NO_LEVEL; unweighted_n],
+            preds: vec![Vec::new(); weighted_n],
+            seen: vec![f64::INFINITY; weighted_n],
+            done: vec![false; weighted_n],
             queue: MinQueue::default(),
         }
     }
 
-    /// Clears everything the previous pass wrote.
-    fn reset(&mut self) {
-        self.sigma.fill(0.0);
-        // `iter_mut()` yields mutable references, so each inner Vec can be
-        // cleared in place. `clear` keeps the allocation for reuse.
-        for list in self.preds.iter_mut() {
-            list.clear();
-        }
-        self.order.clear();
-        self.delta.fill(0.0);
-        self.level.fill(u32::MAX);
-        self.seen.fill(f64::INFINITY);
-        self.done.fill(false);
-        self.queue.clear();
-    }
-
     /// Counts shortest paths from `s` by breadth-first search.
     /// Port of `_single_source_shortest_path_basic`.
+    ///
+    /// NetworkX also records each node's predecessors here. This version
+    /// does not: after a breadth-first search they can be read off the
+    /// levels (see [`Scratch::accumulate`]), which saves building a list per
+    /// node.
     fn count_paths_unweighted(&mut self, g: &Graph, s: NodeId) {
         let adj = g.succ();
         self.sigma[s as usize] = 1.0;
         self.level[s as usize] = 0;
-        self.fifo.push_back(s);
-        while let Some(v) = self.fifo.pop_front() {
-            self.order.push(v);
+        self.order.push(s);
+        // `order` is the queue: `head` walks through it while newly found
+        // nodes are appended at the end.
+        let mut head = 0;
+        while head < self.order.len() {
+            let v = self.order[head];
+            head += 1;
             let level_v = self.level[v as usize];
             let sigma_v = self.sigma[v as usize];
             for &w in adj.neighbors(v) {
                 let wi = w as usize;
-                if self.level[wi] == u32::MAX {
-                    self.fifo.push_back(w);
+                if self.level[wi] == NO_LEVEL {
+                    self.order.push(w);
                     self.level[wi] = level_v + 1;
                 }
                 if self.level[wi] == level_v + 1 {
                     self.sigma[wi] += sigma_v;
-                    self.preds[wi].push(v);
                 }
             }
         }
@@ -307,21 +308,49 @@ impl Scratch {
     }
 
     /// Turns the path counts into this source's contribution to every
-    /// node's betweenness. Ports `_accumulate_basic` and
-    /// `_accumulate_endpoints`.
-    fn accumulate(&mut self, s: NodeId, endpoints: bool, n: usize) -> Vec<f64> {
-        let mut contribution = vec![0.0; n];
+    /// node's betweenness, written into `contribution`, then cleans up.
+    /// Ports `_accumulate_basic` and `_accumulate_endpoints`.
+    ///
+    /// `contribution` must be all zeros on entry. Only the entries of nodes
+    /// the search reached are written.
+    fn accumulate(
+        &mut self,
+        g: &Graph,
+        weighted: bool,
+        s: NodeId,
+        endpoints: bool,
+        contribution: &mut [f64],
+    ) {
         if endpoints {
             contribution[s as usize] = (self.order.len() - 1) as f64;
         }
-        // Visit nodes farthest first.
-        while let Some(w) = self.order.pop() {
+        // Visit nodes farthest first. `.rev()` walks an iterator backwards.
+        for &w in self.order.iter().rev() {
             let wi = w as usize;
             let coeff = (1.0 + self.delta[wi]) / self.sigma[wi];
-            // `self.preds[wi]` and `self.delta` are different fields, so the
-            // compiler allows reading one while writing the other.
-            for &v in &self.preds[wi] {
-                self.delta[v as usize] += self.sigma[v as usize] * coeff;
+            if weighted {
+                // `self.preds[wi]` and `self.delta` are different fields, so
+                // the compiler allows reading one while writing the other.
+                for &v in &self.preds[wi] {
+                    self.delta[v as usize] += self.sigma[v as usize] * coeff;
+                }
+            } else {
+                // The predecessors of w are its in-neighbours one level
+                // closer to the source. NetworkX may list them in another
+                // order, but each one's delta receives a single addition
+                // here, so the order cannot change any result.
+                let level_w = self.level[wi];
+                // The source, at level 0, has no predecessors.
+                if level_w > 0 {
+                    for &v in g.pred().neighbors(w) {
+                        let vi = v as usize;
+                        // An unreached node has level NO_LEVEL, which is
+                        // larger than any real level, so it never matches.
+                        if self.level[vi] == level_w - 1 {
+                            self.delta[vi] += self.sigma[vi] * coeff;
+                        }
+                    }
+                }
             }
             if w != s {
                 contribution[wi] = if endpoints {
@@ -331,9 +360,29 @@ impl Scratch {
                 };
             }
         }
-        contribution
+
+        // Put back every entry this pass wrote. Both searches write only to
+        // nodes that end up in `order`.
+        for &v in &self.order {
+            let vi = v as usize;
+            self.sigma[vi] = 0.0;
+            self.delta[vi] = 0.0;
+            if weighted {
+                self.preds[vi].clear();
+                self.seen[vi] = f64::INFINITY;
+                self.done[vi] = false;
+            } else {
+                self.level[vi] = NO_LEVEL;
+            }
+        }
+        self.order.clear();
+        // The queue is empty by now; this also restarts its tie-break counter.
+        self.queue.clear();
     }
 }
+
+/// How many nodes one task handles when contributions are added up.
+const ADD_BLOCK: usize = 4096;
 
 /// Betweenness centrality of every node: the share of shortest paths that
 /// pass through it.
@@ -344,9 +393,20 @@ impl Scratch {
 ///
 /// Port of `networkx.betweenness_centrality` without sampling (`k=None`).
 ///
-/// The searches run in parallel, a batch of sources at a time. Each source's
-/// contribution is then added in source order, the same order NetworkX adds
-/// them, so the floating-point result is identical to NetworkX's.
+/// # Why the result is identical to NetworkX's
+///
+/// Floating-point addition gives slightly different answers depending on
+/// the order of the additions. NetworkX handles the sources one after
+/// another and adds each one's contribution to a running total per node. To
+/// match it to the last bit, each node's total here receives the same
+/// numbers in the same order.
+///
+/// The work is still parallel, in two ways. The searches of a batch of
+/// sources run in parallel, each writing its contribution into its own
+/// buffer. Then the buffers are added to the totals, and that is parallel
+/// across *nodes*: each task owns a block of nodes and, for those nodes,
+/// adds the buffers in source order. No two tasks touch the same number, and
+/// every number sees its additions in NetworkX's order.
 pub fn betweenness_centrality(
     g: &Graph,
     weights: Option<&[f64]>,
@@ -354,39 +414,72 @@ pub fn betweenness_centrality(
     endpoints: bool,
 ) -> Vec<f64> {
     let n = g.node_count();
+    let weighted = weights.is_some();
     let mut betweenness = vec![0.0; n];
     let sources: Vec<NodeId> = g.nodes().collect();
 
-    // Each contribution is a Vec of n floats, so cap how many are alive at
-    // once at about 32 MB.
-    let batch = (4_000_000 / n.max(1)).clamp(1, 1024);
+    // Each buffer is n floats, so cap how many exist at about 32 MB.
+    let batch = (4_000_000 / n.max(1)).clamp(1, 1024).min(n.max(1));
+    // The buffers are made once and reused by every batch.
+    let mut buffers: Vec<Vec<f64>> = vec![vec![0.0; n]; batch];
 
     // `chunks` yields consecutive sub-slices of at most `batch` elements.
     for chunk in sources.chunks(batch) {
-        let contributions: Vec<Vec<f64>> = chunk
-            .par_iter()
-            // `map_init` is `map` with per-thread state: the first closure
-            // builds one Scratch per worker thread, and the second receives
-            // it mutably for every item that thread handles.
-            .map_init(
-                || Scratch::new(n),
-                |scratch, &s| {
-                    scratch.reset();
-                    match weights {
-                        None => scratch.count_paths_unweighted(g, s),
-                        Some(w) => scratch.count_paths_weighted(g, w, s),
-                    }
-                    scratch.accumulate(s, endpoints, n)
-                },
-            )
+        // `[..chunk.len()]` because the last batch may be shorter.
+        let buffers = &mut buffers[..chunk.len()];
+
+        // Step 1: one search per source, in parallel. `zip` pairs each
+        // buffer with its source. `for_each_init` is `for_each` with
+        // per-thread state: the first closure builds one Scratch per worker
+        // thread, and the second receives it mutably for every item that
+        // thread handles.
+        buffers.par_iter_mut().zip(chunk).for_each_init(
+            || Scratch::new(n, weighted),
+            |scratch, (buffer, &s)| {
+                match weights {
+                    None => scratch.count_paths_unweighted(g, s),
+                    Some(w) => scratch.count_paths_weighted(g, w, s),
+                }
+                scratch.accumulate(g, weighted, s, endpoints, buffer);
+            },
+        );
+
+        // Step 2: add the buffers to the totals, a block of nodes per task.
+        //
+        // The compiler must be shown that the tasks write to different
+        // memory. `chunks_mut` does that: it splits one slice into
+        // non-overlapping mutable pieces. Cut every buffer and the totals
+        // at the same places, then hand each task the matching piece of
+        // each.
+        //
+        // `pieces[j]` is an iterator over buffer j's pieces.
+        let mut pieces: Vec<_> = buffers
+            .iter_mut()
+            .map(|buffer| buffer.chunks_mut(ADD_BLOCK))
             .collect();
-        for contribution in &contributions {
-            // `zip` walks two iterators together; `iter_mut` on the left
-            // gives mutable references so we can add in place.
-            for (total, c) in betweenness.iter_mut().zip(contribution) {
-                *total += c;
+        // One entry per block of nodes: that block of the totals, and the
+        // same block of every buffer, in source order. Calling `next()` on
+        // each iterator in turn takes the next block from each buffer.
+        let blocks: Vec<(&mut [f64], Vec<&mut [f64]>)> = betweenness
+            .chunks_mut(ADD_BLOCK)
+            .map(|totals| {
+                // `filter_map` keeps the `Some` values; every buffer has as
+                // many blocks as the totals, so nothing is dropped.
+                let parts = pieces.iter_mut().filter_map(|piece| piece.next()).collect();
+                (totals, parts)
+            })
+            .collect();
+        // `into_par_iter` consumes the Vec and gives each entry to a task.
+        blocks.into_par_iter().for_each(|(totals, parts)| {
+            for part in parts {
+                for (total, value) in totals.iter_mut().zip(part.iter_mut()) {
+                    *total += *value;
+                    // Zero the buffer for the next batch while it is in the
+                    // CPU cache anyway.
+                    *value = 0.0;
+                }
             }
-        }
+        });
     }
 
     // Port of NetworkX's `_rescale` for the unsampled case.
@@ -478,6 +571,12 @@ where
             (sp.order.len(), python_sum(sp.dist.iter().copied()))
         }
     };
+    closeness_score(reached, total, n, wf_improved)
+}
+
+/// The closeness of a node that `reached` nodes can reach (itself included)
+/// over distances adding up to `total`, in a graph of `n` nodes.
+fn closeness_score(reached: usize, total: f64, n: usize, wf_improved: bool) -> f64 {
     let mut closeness = 0.0;
     if total > 0.0 && n > 1 {
         closeness = (reached as f64 - 1.0) / total;
@@ -488,22 +587,39 @@ where
     closeness
 }
 
-/// [`closeness_of`] for each node in `nodes`, in parallel, each worker
-/// thread with its own [`Workspace`]. `weights` is indexed by edge id.
+/// [`closeness_of`] for each node in `nodes`, in parallel. `weights` is
+/// indexed by edge id.
+///
+/// Unweighted, the searches run 64 at a time (see
+/// [`bfs_totals`](crate::shortest_paths::bfs_totals)). Closeness needs only
+/// how many nodes each search reached and the sum of the distances, and both
+/// are whole numbers, so the result is exactly what one search per node
+/// gives. Weighted, each worker thread runs one Dijkstra search at a time
+/// with its own [`Workspace`].
 pub fn closeness_centrality(
     g: &Graph,
     weights: Option<&[f64]>,
     nodes: &[NodeId],
     wf_improved: bool,
 ) -> Vec<f64> {
-    nodes
-        .par_iter()
-        .map_init(Workspace::new, |ws, &u| {
-            // Turn the optional slice into an optional closure over it.
-            let weight = weights.map(|w| move |e: EdgeId| w[e as usize]);
-            closeness_of(g, weight, u, wf_improved, ws)
-        })
-        .collect()
+    let n = g.node_count();
+    match weights {
+        // Closeness uses distances *to* each node, hence `Reverse`.
+        None => bfs_totals(g, nodes, Direction::Reverse)
+            .iter()
+            // The sum is a whole number well below 2^53, the point up to
+            // which an f64 holds every whole number exactly.
+            .map(|t| closeness_score(t.reached, t.distance_sum as f64, n, wf_improved))
+            .collect(),
+        Some(w) => nodes
+            .par_iter()
+            .map_init(Workspace::new, |ws, &u| {
+                // A closure over the slice, as `closeness_of` expects.
+                let weight = Some(move |e: EdgeId| w[e as usize]);
+                closeness_of(g, weight, u, wf_improved, ws)
+            })
+            .collect(),
+    }
 }
 
 #[cfg(test)]

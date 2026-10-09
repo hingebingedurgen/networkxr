@@ -129,36 +129,37 @@ per node.
 
 | function | nodes | NetworkX | cold | warm | speed-up (cold) |
 |---|---:|---:|---:|---:|---:|
-| connected_components | 200,000 | 150 ms | 48 ms | 6.7 ms | 3x |
-| bfs_edges | 200,000 | 228 ms | 230 ms | 41 ms | 1x |
-| dfs_preorder_nodes | 200,000 | 324 ms | 169 ms | 28 ms | 2x |
-| single_source_shortest_path_length | 200,000 | 210 ms | 57 ms | 9.4 ms | 4x |
-| single_source_shortest_path | 200,000 | 257 ms | 77 ms | 24 ms | 3x |
-| shortest_path (one pair) | 200,000 | 441 µs | 244 µs | 114 µs | 2x |
-| single_source_dijkstra_path_length | 200,000 | 935 ms | 183 ms | 105 ms | 5x |
-| single_source_dijkstra | 200,000 | 953 ms | 199 ms | 124 ms | 5x |
-| dijkstra_path (one pair) | 200,000 | 152 ms | 133 ms | 41 ms | 1x |
-| single_source_bellman_ford_path_length | 200,000 | 1.87 s | 185 ms | 113 ms | 10x |
-| minimum_spanning_tree | 200,000 | 1.47 s | 462 ms | 336 ms | 3x |
-| pagerank | 200,000 | 705 ms | 94 ms | 31 ms | 7x |
-| degree_centrality | 200,000 | 33 ms | 29 ms | 4.0 ms | 1x |
-| strongly_connected_components | 200,000 | 266 ms | 55 ms | 15 ms | 5x |
-| pagerank (directed) | 200,000 | 342 ms | 70 ms | 22 ms | 5x |
-| topological_sort | 200,000 | 218 ms | 47 ms | 6.7 ms | 5x |
-| dag_longest_path | 200,000 | 655 ms | 87 ms | 32 ms | 8x |
-| cycle_basis | 2,000 | 22 ms | 9.9 ms | 7.5 ms | 2x |
-| betweenness_centrality | 2,000 | 4.54 s | 33 ms | 31 ms | 139x |
-| betweenness_centrality (weighted) | 2,000 | 10.97 s | 63 ms | 61 ms | 175x |
-| closeness_centrality | 2,000 | 1.04 s | 7.4 ms | 5.9 ms | 140x |
-| all_pairs_shortest_path_length | 2,000 | 1.05 s | 73 ms | 63 ms | 14x |
-| all_pairs_dijkstra_path_length | 2,000 | 5.85 s | 122 ms | 115 ms | 48x |
-| average_shortest_path_length | 2,000 | 1.09 s | 7.0 ms | 5.7 ms | 157x |
+| connected_components | 200,000 | 153 ms | 49 ms | 7.3 ms | 3x |
+| bfs_edges | 200,000 | 235 ms | 233 ms | 41 ms | 1x |
+| dfs_preorder_nodes | 200,000 | 349 ms | 173 ms | 28 ms | 2x |
+| single_source_shortest_path_length | 200,000 | 171 ms | 58 ms | 9.4 ms | 3x |
+| single_source_shortest_path | 200,000 | 199 ms | 78 ms | 21 ms | 3x |
+| shortest_path (one pair) | 200,000 | 521 µs | 202 µs | 115 µs | 3x |
+| single_source_dijkstra_path_length | 200,000 | 768 ms | 179 ms | 104 ms | 4x |
+| single_source_dijkstra | 200,000 | 967 ms | 210 ms | 129 ms | 5x |
+| dijkstra_path (one pair) | 200,000 | 188 ms | 139 ms | 42 ms | 1x |
+| single_source_bellman_ford_path_length | 200,000 | 1.93 s | 190 ms | 118 ms | 10x |
+| minimum_spanning_tree | 200,000 | 1.51 s | 454 ms | 345 ms | 3x |
+| pagerank | 200,000 | 742 ms | 97 ms | 32 ms | 8x |
+| degree_centrality | 200,000 | 34 ms | 32 ms | 4.5 ms | 1x |
+| strongly_connected_components | 200,000 | 271 ms | 56 ms | 16 ms | 5x |
+| pagerank (directed) | 200,000 | 346 ms | 71 ms | 23 ms | 5x |
+| topological_sort | 200,000 | 225 ms | 46 ms | 7.1 ms | 5x |
+| dag_longest_path | 200,000 | 675 ms | 88 ms | 32 ms | 8x |
+| cycle_basis | 2,000 | 23 ms | 8.8 ms | 7.8 ms | 3x |
+| betweenness_centrality | 2,000 | 4.78 s | 20 ms | 18 ms | 240x |
+| betweenness_centrality (weighted) | 2,000 | 11.36 s | 64 ms | 61 ms | 178x |
+| closeness_centrality | 2,000 | 1.07 s | 1.5 ms | 0.76 ms | 721x |
+| all_pairs_shortest_path_length | 2,000 | 1.09 s | 74 ms | 65 ms | 15x |
+| all_pairs_dijkstra_path_length | 2,000 | 6.02 s | 123 ms | 116 ms | 49x |
+| average_shortest_path_length | 2,000 | 1.12 s | 1.7 ms | 0.71 ms | 648x |
 
 Reading the table:
 
 - The biggest wins are the algorithms that run one search per node
   (betweenness, closeness, all pairs). They are pure Rust loops and use every
-  CPU core.
+  CPU core. Unweighted closeness and average shortest path length also run
+  64 searches at a time, one per bit of a machine word.
 - Next come single passes where NetworkX does a lot of work per edge in
   Python: weighted searches, PageRank, longest paths.
 - A single cheap pass such as BFS gains less on a cold call, because reading
@@ -175,40 +176,112 @@ Reading the table:
 - `minimum_spanning_tree` spends most of its remaining time building the
   result graph in Python.
 - Weighted searches are slower than unweighted ones by more than the
-  algorithm explains (105 ms against 9 ms warm) because every call reads the
+  algorithm explains (104 ms against 9 ms warm) because every call reads the
   weights afresh from the graph's attribute dicts.
+
+### Larger graphs
+
+The per-node algorithms are where NetworkX stops being usable well before a
+graph is large, because their cost grows with nodes times edges.
+`python benchmarks/bench.py --scaling` runs them at growing sizes:
+
+| function | nodes | edges | NetworkX | networkxrs | speed-up |
+|---|---:|---:|---:|---:|---:|
+| betweenness_centrality | 2,000 | 9,991 | 4.45 s | 20 ms | 219x |
+| betweenness_centrality | 5,000 | 24,834 | 30.2 s | 127 ms | 237x |
+| betweenness_centrality | 10,000 | 49,853 | ~2.3 min | 550 ms | ~246x |
+| betweenness_centrality | 20,000 | 99,903 | ~9.8 min | 2.26 s | ~259x |
+| betweenness_centrality | 50,000 | 249,748 | ~82 min | 15.3 s | ~323x |
+| betweenness_centrality (weighted) | 2,000 | 9,991 | 10.8 s | 67 ms | 161x |
+| betweenness_centrality (weighted) | 5,000 | 24,834 | 74.5 s | 414 ms | 180x |
+| betweenness_centrality (weighted) | 10,000 | 49,853 | ~5.5 min | 1.71 s | ~192x |
+| betweenness_centrality (weighted) | 20,000 | 99,903 | ~25 min | 7.76 s | ~192x |
+| betweenness_centrality (weighted) | 50,000 | 249,748 | ~3.4 h | 62.8 s | ~197x |
+| closeness_centrality | 2,000 | 9,991 | 1.02 s | 1.4 ms | 746x |
+| closeness_centrality | 5,000 | 24,834 | 8.26 s | 4.6 ms | 1805x |
+| closeness_centrality | 10,000 | 49,853 | 31.7 s | 15 ms | 2096x |
+| closeness_centrality | 20,000 | 99,903 | ~2.6 min | 57 ms | ~2689x |
+| closeness_centrality | 50,000 | 249,748 | ~19 min | 362 ms | ~3181x |
+
+A `~` marks a NetworkX time that was not measured but estimated, by running
+the search from 50 of the nodes and multiplying up, because the real call
+would take minutes to hours. Those rows were not checked against NetworkX;
+the rows without a `~` were, and match exactly. Every networkxrs time is
+measured. `--budget` sets how long a NetworkX call may take before it is
+estimated instead.
+
+### Usage patterns
 
 Whole usage patterns, on the 200,000-node graph, including ones that are
 awkward for this design:
 
 | pattern | calls | NetworkX | networkxrs | speed-up |
 |---|---:|---:|---:|---:|
-| add an edge, then `has_path` | 300 | 41 ms | 36 ms | 1.1x |
-| `shortest_path_length`, random pairs | 3,000 | 341 ms | 122 ms | 2.8x |
-| `dijkstra_path_length`, random pairs | 30 | 10.5 s | 1.73 s | 6.0x |
-| 2-step neighbourhood of each node | 20,000 | 301 ms | 177 ms | 1.7x |
-| first item of `bfs_edges` | 20,000 | 24 ms | 44 ms | 0.5x |
-| Dijkstra from each of several sources | 10 | 7.62 s | 930 ms | 8.2x |
+| add an edge, then `has_path` | 300 | 43 ms | 38 ms | 1.1x |
+| `shortest_path_length`, random pairs | 3,000 | 383 ms | 123 ms | 3.1x |
+| `dijkstra_path_length`, random pairs | 30 | 10.5 s | 1.74 s | 6.0x |
+| 2-step neighbourhood of each node | 20,000 | 328 ms | 179 ms | 1.8x |
+| first item of `bfs_edges` | 20,000 | 66 ms | 85 ms | 0.8x |
+| Dijkstra from each of several sources | 10 | 7.46 s | 940 ms | 7.9x |
 
 The one row below 1x is the per-call overhead: 20,000 calls that each do
-about one microsecond of work in NetworkX cost about two here.
+a few microseconds of work in NetworkX cost about one microsecond more here.
 
-For comparison, [rustworkx](https://www.rustworkx.org/) on the same graphs,
-once they are in its own format: single-source Dijkstra took 81 ms against
-networkxrs's 105 ms warm, connected components 40 ms against 6.7 ms,
-betweenness 45 ms against 31 ms, closeness 32 ms against 5.9 ms, and the
-spanning tree 32 ms against 336 ms (it returns the tree in its own format,
-where networkxrs builds a NetworkX graph). Converting the 200,000-node
-NetworkX graph with rustworkx's own converter took 450 to 730 ms, against
-about 40 ms for a snapshot here. The benchmark script prints these if
-rustworkx is installed.
+### Other Rust engines
 
-A note on measuring: the benchmark holds millions of Python objects, and on
-a heap that size one pass of Python's garbage collector takes longer than
-most of the calls being timed and lands on whichever call is running. The
-script freezes the heap after building its graphs (`gc.freeze()`) so that
-both libraries are timed without it. A program holding large NetworkX graphs
-pays that cost whichever library it calls.
+The benchmark script prints columns for these if they are installed. Their
+results are not checked against NetworkX, since neither promises identical
+output.
+
+[rustnx](https://github.com/fabuseless/rustnx) is the closest project: a
+Rust engine used as a NetworkX backend, with far more functions than this
+one covers. Version 0.1.0a3, same machine, same graphs:
+
+| | networkxrs | rustnx |
+|---|---:|---:|
+| betweenness_centrality, 50,000 nodes | 15.3 s | 14.4 s |
+| betweenness_centrality (weighted), 50,000 nodes | 62.8 s | 60.1 s |
+| closeness_centrality, 50,000 nodes | 362 ms | 323 ms |
+| all_pairs_dijkstra_path_length, 2,000 nodes | 123 ms | 302 ms |
+| pagerank, 200,000 nodes, cold / warm | 97 / 32 ms | 160 / 15 ms |
+| single_source_dijkstra_path_length, cold / warm | 179 / 104 ms | 220 / 72 ms |
+| dijkstra_path (one pair), cold / warm | 139 / 42 ms | 157 / 7.4 ms |
+| bfs_edges, cold / warm | 233 / 41 ms | 117 / 32 ms |
+| add an edge, then `has_path`, 300 times | 38 ms | 23.1 s |
+| first item of `bfs_edges`, 20,000 times | 85 ms | 2.6 min |
+| 2-step neighbourhood of each node, 20,000 times | 179 ms | 442 ms |
+| `dijkstra_path_length`, 30 random pairs | 1.74 s | 910 ms |
+
+The heavy algorithms are within about 10% of each other. The differences
+come from two design choices. rustnx keeps a copy of the edge weights, which
+makes repeated weighted queries faster; networkxrs reads them from the graph
+on every call, so a weight changed in place is never out of date. rustnx
+converts the graph whenever it is asked to run, and computes a generator's
+whole result before yielding; networkxrs first decides whether Rust will pay
+off (see [When it uses Rust](#when-it-uses-rust)), which is what the edit
+and first-item rows show. rustnx's betweenness in that release differs from
+NetworkX's in the last bits; here it is identical.
+
+Bit-parallel BFS for closeness, and reading betweenness predecessors off the
+BFS levels, were adopted here after reading rustnx's source.
+
+[rustworkx](https://www.rustworkx.org/) has its own graph type and API. On
+the same graphs, once they are in its format: single-source Dijkstra took
+85 ms against networkxrs's 104 ms warm, connected components 40 ms against
+7.3 ms, betweenness 46 ms against 18 ms, closeness 37 ms against 0.76 ms,
+and the spanning tree 33 ms against 345 ms (it returns the tree in its own
+format, where networkxrs builds a NetworkX graph). Converting the
+200,000-node NetworkX graph with rustworkx's own converter took 420 to
+660 ms, against about 40 ms for a snapshot here.
+
+### A note on measuring
+
+The benchmark holds millions of Python objects, and on a heap that size one
+pass of Python's garbage collector takes longer than most of the calls being
+timed and lands on whichever call is running. The script freezes the heap
+after building its graphs (`gc.freeze()`) so that both libraries are timed
+without it. A program holding large NetworkX graphs pays that cost whichever
+library it calls.
 
 ## How it works
 

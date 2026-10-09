@@ -1,8 +1,9 @@
-"""Time networkxrs against NetworkX (and rustworkx, if installed).
+"""Time networkxrs against NetworkX (and rustworkx and rustnx, if installed).
 
     python benchmarks/bench.py            # full run, a few minutes
     python benchmarks/bench.py --quick    # smaller graphs, under a minute
     python benchmarks/bench.py --markdown # print Markdown tables
+    python benchmarks/bench.py --scaling  # per-node algorithms at growing sizes
 
 The first table times single calls. Three timings are reported for networkxrs:
 
@@ -16,10 +17,26 @@ The second table times whole usage patterns, including ones chosen to be
 awkward for a snapshot-based design: many tiny queries, and queries
 interleaved with edits to the graph.
 
-Every result is checked against NetworkX's before its time is reported.
+Every networkxrs result is checked against NetworkX's before its time is
+reported. rustworkx and rustnx results are not checked: neither promises
+results identical to NetworkX's.
+
+rustnx is another Rust engine for NetworkX, used as a NetworkX backend
+(``networkx.pagerank(G, backend="rustnx")``). Like networkxrs it converts the
+graph on the first call and caches the conversion, so it gets the same cold
+and warm columns. An empty cell means rustnx does not implement the call.
+
+``--scaling`` runs a different experiment: the algorithms that do one search
+per node (betweenness and closeness), on graphs from 2,000 to 50,000 nodes.
+NetworkX needs minutes to hours for the larger ones, so past a time budget
+(``--budget``, 120 seconds per call by default) its time is not measured but
+estimated: the search is run from 50 of the nodes and the time is multiplied
+up. Estimates are marked with ``~``, and a row with an estimate is not
+checked against NetworkX. Pass a large ``--budget`` to measure everything.
 """
 
 import argparse
+import functools
 import gc
 import math
 import os
@@ -35,6 +52,33 @@ try:
     import rustworkx
 except ImportError:
     rustworkx = None
+
+try:
+    import rustnx
+except ImportError:
+    rustnx = None
+else:
+    # NetworkX warns every time a backend reuses a cached conversion.
+    networkx.config.warnings_to_ignore.add("cache")
+
+
+class Backend:
+    """Looks like the networkx module, but sends every call to one backend:
+    ``Backend("rustnx").pagerank(G)`` is ``networkx.pagerank(G, backend="rustnx")``."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def __getattr__(self, function):
+        return functools.partial(getattr(networkx, function), backend=self.name)
+
+
+def timed_or_none(function):
+    """`timed`, or None if the backend does not implement the call."""
+    try:
+        return timed(function)[0]
+    except NotImplementedError:
+        return None
 
 
 def make_graph(n, degree, directed, seed, dag=False):
@@ -171,7 +215,95 @@ def human(seconds):
         return f"{seconds * 1e6:.0f} µs"
     if seconds < 1:
         return f"{seconds * 1e3:.1f} ms"
-    return f"{seconds:.2f} s"
+    if seconds < 120:
+        return f"{seconds:.2f} s"
+    if seconds < 7200:
+        return f"{seconds / 60:.1f} min"
+    return f"{seconds / 3600:.1f} h"
+
+
+SCALING_SIZES = [2_000, 5_000, 10_000, 20_000, 50_000]
+SCALING_SAMPLE = 50
+
+# (label, the full call, the same work from only the sources in `nodes`).
+# The third entry is only ever run on NetworkX, to estimate its full time.
+SCALING = [
+    (
+        "betweenness_centrality",
+        lambda m, G: m.betweenness_centrality(G),
+        lambda G, nodes: networkx.betweenness_centrality(G, k=len(nodes), seed=1),
+    ),
+    (
+        "betweenness_centrality (weighted)",
+        lambda m, G: m.betweenness_centrality(G, weight="weight"),
+        lambda G, nodes: networkx.betweenness_centrality(G, k=len(nodes), weight="weight", seed=1),
+    ),
+    (
+        "closeness_centrality",
+        lambda m, G: m.closeness_centrality(G),
+        lambda G, nodes: [networkx.closeness_centrality(G, u=u) for u in nodes],
+    ),
+]
+
+
+def scaling(args):
+    """The per-node algorithms on graphs of growing size."""
+    sizes = [n for n in SCALING_SIZES if not args.quick or n <= 5_000]
+    rows = []
+    for n in sizes:
+        G = make_graph(n, 10, False, 4)
+        gc.collect()
+        gc.freeze()  # see the comment in main()
+        rng = random.Random(8)
+        sample = rng.sample(range(n), SCALING_SAMPLE)
+        for label, call, sampled in SCALING:
+            if args.only and args.only not in label:
+                continue
+            G.__networkx_cache__.clear()
+            t_sample, _ = timed(lambda: sampled(G, sample))
+            estimate = t_sample * n / SCALING_SAMPLE
+            measured = estimate <= args.budget
+            if measured:
+                t_nx, expected = timed(lambda: call(networkx, G))
+            else:
+                t_nx = estimate
+            t_ours, actual = timed(lambda: call(networkxrs, G))
+            if measured and not same(actual, expected):
+                raise SystemExit(f"{label}: networkxrs and NetworkX disagree")
+            row = [label, f"{n:,}", f"{G.number_of_edges():,}",
+                   ("" if measured else "~") + human(t_nx), human(t_ours),
+                   ("" if measured else "~") + f"{t_nx / t_ours:.0f}x"]
+            if rustnx is not None:
+                G.__networkx_cache__.clear()
+                t_rustnx = timed_or_none(lambda: call(Backend("rustnx"), G))
+                row.append("" if t_rustnx is None else human(t_rustnx))
+            rows.append(row)
+            print("  " + "  ".join(row), flush=True)
+    header = ["function", "nodes", "edges", "NetworkX", "networkxrs", "speed-up"]
+    if rustnx is not None:
+        header.append("rustnx")
+    return header, rows
+
+
+def print_table(table_header, table_rows, markdown):
+    print()
+    if markdown:
+        print("| " + " | ".join(table_header) + " |")
+        print("|" + "|".join(["---"] + ["---:"] * (len(table_header) - 1)) + "|")
+        for row in table_rows:
+            print("| " + " | ".join(row) + " |")
+    else:
+        table = [table_header, *table_rows]
+        widths = [max(len(r[i]) for r in table) for i in range(len(table_header))]
+        for r in table:
+            print("  ".join(c.ljust(w) if i == 0 else c.rjust(w) for i, (c, w) in enumerate(zip(r, widths))))
+
+
+def environment():
+    return (f"networkx {networkx.__version__}, networkxrs {networkxrs.__networkxrs_version__}, "
+            f"Python {platform.python_version()}, {os.cpu_count()} CPU cores, {platform.machine()}, "
+            f"policy {networkxrs.get_policy()!r}"
+            + (f", rustnx {rustnx.__version__}" if rustnx is not None else ""))
 
 
 def main():
@@ -179,7 +311,19 @@ def main():
     parser.add_argument("--quick", action="store_true", help="smaller graphs")
     parser.add_argument("--markdown", action="store_true", help="print a Markdown table")
     parser.add_argument("--only", help="run benchmarks whose label contains this text")
+    parser.add_argument("--scaling", action="store_true", help="per-node algorithms at growing sizes")
+    parser.add_argument("--budget", type=float, default=120.0,
+                        help="with --scaling: estimate a NetworkX call instead of running it "
+                             "when it would take longer than this many seconds")
     args = parser.parse_args()
+
+    if args.scaling:
+        table_header, table_rows = scaling(args)
+        print()
+        print(environment())
+        print(f"~ marks a NetworkX time estimated from {SCALING_SAMPLE} of the nodes")
+        print_table(table_header, table_rows, args.markdown)
+        return
 
     big, medium = (20_000, 400) if args.quick else (200_000, 2_000)
     print(f"building graphs ({big:,} and {medium:,} nodes, about 5 edges per node) ...", flush=True)
@@ -226,12 +370,22 @@ def main():
                     R.update_edge_by_index(index, G[u][v]["weight"])
                 t_rx = min(timed(lambda: rx_call(R))[0] for _ in range(3))
                 row += [human(t_convert + t_rx), human(t_rx)]
+        if rustnx is not None:
+            G.__networkx_cache__.clear()
+            backend = Backend("rustnx")
+            t_cold = timed_or_none(lambda: call(backend, G))
+            if t_cold is None:
+                row += ["", ""]
+            else:
+                row += [human(t_cold), human(min(timed(lambda: call(backend, G))[0] for _ in range(3)))]
         rows.append(row)
         print("  " + "  ".join(row), flush=True)
 
     header = ["function", "nodes", "NetworkX", "networkxrs cold", "networkxrs warm", "speed-up (cold)"]
     if rustworkx is not None:
         header += ["rustworkx incl. conversion", "rustworkx"]
+    if rustnx is not None:
+        header += ["rustnx cold", "rustnx warm"]
 
     pattern_rows = []
     for label, kind, function, full, quick in PATTERNS:
@@ -246,27 +400,20 @@ def main():
         if actual != expected:
             raise SystemExit(f"{label}: networkxrs and NetworkX disagree")
         row = [label, f"{rounds:,}", human(t_nx), human(t_ours), f"{t_nx / t_ours:.1f}x"]
+        if rustnx is not None:
+            third = graphs[kind].copy()
+            t_rustnx = timed_or_none(lambda: function(Backend("rustnx"), third, rounds))
+            row.append("" if t_rustnx is None else human(t_rustnx))
         pattern_rows.append(row)
         print("  " + "  ".join(row), flush=True)
     pattern_header = ["pattern", "calls", "NetworkX", "networkxrs", "speed-up"]
+    if rustnx is not None:
+        pattern_header.append("rustnx")
 
     print()
-    print(f"networkx {networkx.__version__}, networkxrs {networkxrs.__networkxrs_version__}, "
-          f"Python {platform.python_version()}, {os.cpu_count()} CPU cores, {platform.machine()}, "
-          f"policy {networkxrs.get_policy()!r}")
-    for table_header, table_rows in ((header, rows), (pattern_header, pattern_rows)):
-        print()
-        if args.markdown:
-            print("| " + " | ".join(table_header) + " |")
-            print("|" + "|".join(["---"] + ["---:"] * (len(table_header) - 1)) + "|")
-            for row in table_rows:
-                print("| " + " | ".join(row) + " |")
-        else:
-            table = [table_header, *table_rows]
-            widths = [max(len(r[i]) for r in table) for i in range(len(table_header))]
-            for r in table:
-                print("  ".join(c.ljust(w) if i == 0 else c.rjust(w) for i, (c, w) in enumerate(zip(r, widths))))
-
+    print(environment())
+    print_table(header, rows, args.markdown)
+    print_table(pattern_header, pattern_rows, args.markdown)
 
 if __name__ == "__main__":
     main()

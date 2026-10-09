@@ -33,7 +33,7 @@ use std::fmt;
 // `prelude::*` imports the traits that add `.par_iter()` and friends.
 use rayon::prelude::*;
 
-use crate::graph::{Direction, EdgeId, Graph, NodeId, NO_NODE};
+use crate::graph::{Csr, Direction, EdgeId, Graph, NodeId, NO_NODE};
 use crate::workspace::{Workspace, UNSEEN};
 
 /// In [`Tree::parent`], marks the root, which has no parent.
@@ -176,19 +176,192 @@ pub fn bfs_many(
         .collect()
 }
 
+/// What one breadth-first search found, when only totals are wanted.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct BfsTotal {
+    /// How many nodes the search reached, the source included.
+    pub reached: usize,
+    /// The sum of the distances to them.
+    pub distance_sum: u64,
+}
+
+/// How many searches [`MultiBfs`] runs at once: the number of bits in a
+/// `u64`.
+const LANES: usize = 64;
+
+/// Working memory for [`MultiBfs::run`]. Each entry of each array belongs to
+/// one node and is a `u64` used as 64 separate yes/no flags, one per search.
+/// Bit `i` of a node's entry is that node's flag for search number `i`.
+struct MultiBfs {
+    /// Flag `i` set: search `i` has reached this node.
+    seen: Vec<u64>,
+    /// Flag `i` set: search `i` reached this node in the level just finished.
+    frontier: Vec<u64>,
+    /// Flag `i` set: search `i` reaches this node in the level being built.
+    next: Vec<u64>,
+    /// The nodes whose `frontier` entry is not zero.
+    frontier_nodes: Vec<NodeId>,
+    /// The nodes whose `next` entry is not zero.
+    next_nodes: Vec<NodeId>,
+}
+
+impl MultiBfs {
+    fn new(n: usize) -> Self {
+        Self {
+            seen: vec![0; n],
+            frontier: vec![0; n],
+            next: vec![0; n],
+            frontier_nodes: Vec::new(),
+            next_nodes: Vec::new(),
+        }
+    }
+
+    /// Breadth-first search from up to 64 sources at once.
+    ///
+    /// An ordinary search asks, for every edge `v -> w` out of the current
+    /// level, "has the search seen `w`?". Running 64 searches means asking
+    /// that 64 times per edge. Here the 64 answers sit side by side in one
+    /// integer, so one `|` (bitwise or) and one `&` (bitwise and) answer the
+    /// question for all 64 searches together. The CPU does either in a
+    /// single instruction.
+    ///
+    /// The searches do not interfere: bit `i` only ever meets bit `i`. Each
+    /// one visits exactly the nodes, at exactly the distances, that it would
+    /// on its own, so the totals are the same as from 64 separate searches.
+    /// The saving is largest when the searches overlap, which they do on any
+    /// graph where most nodes are a few steps from most others.
+    ///
+    /// The technique is known as multi-source or bit-parallel BFS. rustnx,
+    /// another Rust engine for NetworkX, uses it for closeness, which is
+    /// where the idea to use it here came from.
+    fn run(&mut self, adj: &Csr, sources: &[NodeId]) -> Vec<BfsTotal> {
+        debug_assert!(sources.len() <= LANES);
+        // One total per search. A source reaches itself at distance 0.
+        let mut totals = vec![
+            BfsTotal {
+                reached: 1,
+                distance_sum: 0
+            };
+            sources.len()
+        ];
+
+        // `enumerate` pairs each item with its position: search `lane`
+        // starts at node `s`. `1 << lane` is the integer with only bit
+        // `lane` set.
+        for (lane, &s) in sources.iter().enumerate() {
+            let si = s as usize;
+            // The same node may be listed twice, so check before pushing.
+            if self.frontier[si] == 0 {
+                self.frontier_nodes.push(s);
+            }
+            self.frontier[si] |= 1 << lane;
+            self.seen[si] |= 1 << lane;
+        }
+
+        let n = self.seen.len();
+        let mut level = 0u64;
+        while !self.frontier_nodes.is_empty() {
+            level += 1;
+
+            // There are two ways to find the nodes reached in this level.
+            // *Listing* notes each one in `next_nodes` as it is reached,
+            // which costs nothing for the nodes not reached. *Sweeping*
+            // looks at every node afterwards, which is cheaper per node
+            // reached and leaves them in index order, the order that is
+            // kindest to the CPU's memory cache. Sweep when the level is
+            // likely to reach a good share of the graph.
+            let sweep = self.frontier_nodes.len() >= n / 16;
+
+            // Push every flag in the frontier along every edge.
+            for &v in &self.frontier_nodes {
+                let arriving = self.frontier[v as usize];
+                for &w in adj.neighbors(v) {
+                    let wi = w as usize;
+                    // `!x` flips every bit. `a & !b` keeps the flags set in
+                    // `a` and not in `b`: the searches arriving at `w` that
+                    // have not been here before.
+                    let new = arriving & !self.seen[wi];
+                    if sweep {
+                        self.next[wi] |= new;
+                    } else if new != 0 {
+                        if self.next[wi] == 0 {
+                            self.next_nodes.push(w);
+                        }
+                        self.next[wi] |= new;
+                    }
+                }
+            }
+
+            // The frontier has been used; clear its flags.
+            for &v in &self.frontier_nodes {
+                self.frontier[v as usize] = 0;
+            }
+            self.frontier_nodes.clear();
+
+            if sweep {
+                // `filter` keeps the items for which the closure is true;
+                // `extend` appends everything an iterator yields.
+                let next = &self.next;
+                self.next_nodes
+                    .extend((0..n as NodeId).filter(|&w| next[w as usize] != 0));
+            }
+
+            // The nodes just reached become the frontier of the next level.
+            for &w in &self.next_nodes {
+                let wi = w as usize;
+                let new = self.next[wi];
+                self.next[wi] = 0;
+                self.seen[wi] |= new;
+                self.frontier[wi] = new;
+
+                // Credit each search that arrived. `trailing_zeros` is the
+                // position of the lowest set bit, and `bits & (bits - 1)`
+                // clears that bit, so the loop runs once per set bit.
+                let mut bits = new;
+                while bits != 0 {
+                    let total = &mut totals[bits.trailing_zeros() as usize];
+                    total.reached += 1;
+                    total.distance_sum += level;
+                    bits &= bits - 1;
+                }
+            }
+            // `swap` exchanges the two Vecs without copying their contents.
+            // `next_nodes` receives the cleared `frontier_nodes`.
+            std::mem::swap(&mut self.frontier_nodes, &mut self.next_nodes);
+        }
+
+        // Leave the memory clean for the next batch. `fill` is a plain
+        // memory write, far cheaper than the search was.
+        self.seen.fill(0);
+        totals
+    }
+}
+
+/// For each of `sources`: how many nodes a breadth-first search from it
+/// reaches, and the sum of the distances to them. Results are in the order
+/// of `sources`.
+///
+/// The searches run 64 at a time (see [`MultiBfs::run`]), and the batches of
+/// 64 run in parallel. `par_chunks(64)` is rayon's parallel version of
+/// `chunks(64)`, which yields consecutive sub-slices of at most 64 items.
+/// `flatten` then turns the list of per-batch lists into one list.
+pub fn bfs_totals(g: &Graph, sources: &[NodeId], dir: Direction) -> Vec<BfsTotal> {
+    let adj = g.adjacency(dir);
+    let n = g.node_count();
+    let batches: Vec<Vec<BfsTotal>> = sources
+        .par_chunks(LANES)
+        .map_init(|| MultiBfs::new(n), |state, batch| state.run(adj, batch))
+        .collect();
+    batches.into_iter().flatten().collect()
+}
+
 /// The sum of shortest-path lengths over all ordered pairs of nodes,
-/// counting only pairs where a path exists. Runs one search per node, in
-/// parallel.
+/// counting only pairs where a path exists.
 pub fn bfs_distance_sum(g: &Graph) -> u64 {
     let sources: Vec<NodeId> = g.nodes().collect();
-    sources
-        .par_iter()
-        .map_init(Workspace::new, |ws, &s| {
-            let tree = bfs(g, s, Direction::Forward, None, ws);
-            // `u64::from` widens without loss. `sum` adds the items; the
-            // `::<u64>` ("turbofish") says what type to add them up as.
-            tree.dist.iter().map(|&d| u64::from(d)).sum::<u64>()
-        })
+    bfs_totals(g, &sources, Direction::Forward)
+        .iter()
+        .map(|total| total.distance_sum)
         .sum()
 }
 
@@ -852,6 +1025,36 @@ mod tests {
     /// A square 0-1-3 / 0-2-3 with a pendant node 4 on 3.
     fn square() -> Graph {
         Graph::from_edges(5, &[(0, 1), (0, 2), (1, 3), (2, 3), (3, 4)], false).unwrap()
+    }
+
+    /// Searches run 64 at a time must find what one search at a time finds.
+    #[test]
+    fn bfs_totals_match_separate_searches() {
+        // 200 nodes so that there are several batches of 64, with a ring,
+        // some chords, a second component (150..160) and isolated nodes.
+        let mut edges: Vec<(NodeId, NodeId)> = (0..150).map(|u| (u, (u + 1) % 150)).collect();
+        edges.extend((0..150).step_by(7).map(|u| (u, (u * 3 + 11) % 150)));
+        edges.extend((150..159).map(|u| (u, u + 1)));
+        for directed in [false, true] {
+            let g = Graph::from_edges(200, &edges, directed).unwrap();
+            // Every node, then node 5 again: a repeated source is allowed.
+            let mut sources: Vec<NodeId> = g.nodes().collect();
+            sources.push(5);
+            for dir in [Direction::Forward, Direction::Reverse] {
+                let mut ws = Workspace::new();
+                let expected: Vec<BfsTotal> = sources
+                    .iter()
+                    .map(|&s| {
+                        let tree = bfs(&g, s, dir, None, &mut ws);
+                        BfsTotal {
+                            reached: tree.order.len(),
+                            distance_sum: tree.dist.iter().map(|&d| u64::from(d)).sum(),
+                        }
+                    })
+                    .collect();
+                assert_eq!(bfs_totals(&g, &sources, dir), expected);
+            }
+        }
     }
 
     #[test]
