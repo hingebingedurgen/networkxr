@@ -1,23 +1,22 @@
-# networkxr
+# networkxrs
 
 NetworkX, with the hot algorithms running in Rust. Change one line:
 
 ```python
-import networkxr as nx
+import networkxrs as nx
 ```
 
 Everything NetworkX provides is there under the same names. 65 of its
 functions run in Rust and return what NetworkX returns. The rest *are*
 NetworkX.
 
-> **Status: first milestone (0.1).** The name `networkxr` is a working name
-> and is already taken on PyPI by another project, so this cannot be
-> published under it. See [Before publishing](#before-publishing).
+> **Status: first milestone (0.1).** Not yet published. See
+> [Before publishing](#before-publishing).
 
 ## Using it
 
 ```python
-import networkxr as nx
+import networkxrs as nx
 
 G = nx.gnp_random_graph(100_000, 1e-4, seed=1)   # an ordinary networkx.Graph
 ranks = nx.pagerank(G)                            # Rust
@@ -25,7 +24,7 @@ dist = nx.single_source_dijkstra_path_length(G, 0)  # Rust
 tri = nx.triangles(G)                             # NetworkX, as before
 ```
 
-Graphs are plain NetworkX graphs: `networkxr.Graph is networkx.Graph`. You
+Graphs are plain NetworkX graphs: `networkxrs.Graph is networkx.Graph`. You
 can hand them to any other library, mix both imports in one program, and
 pickle them as usual.
 
@@ -63,7 +62,7 @@ reproduce NetworkX exactly:
 - less common options: `sort_neighbors`, sampling in betweenness (`k`),
   Prim's and Borůvka's spanning-tree algorithms, a caller-supplied
   `topo_order`;
-- any argument networkxr does not know, such as one added by a NetworkX
+- any argument networkxrs does not know, such as one added by a NetworkX
   release newer than it.
 
 `nx.dispatch_counts()` shows which way calls went.
@@ -83,14 +82,14 @@ How that is checked:
   with self-loops, with odd node types) through both libraries and compares
   the outcomes strictly. It does this under both the `adaptive` and `eager`
   policies: 6,412 tests.
-- **NetworkX's own test-suite**, run with networkxr's functions patched into
+- **NetworkX's own test-suite**, run with networkxrs's functions patched into
   the `networkx` namespace, so that NetworkX's unmodified tests (and
   NetworkX's other algorithms, which call these functions internally)
   exercise the Rust code. All of it passes under both policies with one
   exception, listed below: 7,047 of 7,048 tests on NetworkX 3.6.1 and 9,360
-  of 9,361 on NetworkX 3.7. `python -m networkxr.conformance` runs the
+  of 9,361 on NetworkX 3.7. `python -m networkxrs.conformance` runs the
   modules that cover the accelerated functions;
-  `pytest -p networkxr.conformance --pyargs networkx` runs everything.
+  `pytest -p networkxrs.conformance --pyargs networkx` runs everything.
 
 Results are matched to NetworkX **3.6 and 3.7**. Older releases behave
 slightly differently from these in places (dict order, tie-breaking), so they
@@ -182,7 +181,7 @@ Reading the table:
 Whole usage patterns, on the 200,000-node graph, including ones that are
 awkward for this design:
 
-| pattern | calls | NetworkX | networkxr | speed-up |
+| pattern | calls | NetworkX | networkxrs | speed-up |
 |---|---:|---:|---:|---:|
 | add an edge, then `has_path` | 300 | 41 ms | 36 ms | 1.1x |
 | `shortest_path_length`, random pairs | 3,000 | 341 ms | 122 ms | 2.8x |
@@ -196,10 +195,10 @@ about one microsecond of work in NetworkX cost about two here.
 
 For comparison, [rustworkx](https://www.rustworkx.org/) on the same graphs,
 once they are in its own format: single-source Dijkstra took 81 ms against
-networkxr's 105 ms warm, connected components 40 ms against 6.7 ms,
+networkxrs's 105 ms warm, connected components 40 ms against 6.7 ms,
 betweenness 45 ms against 31 ms, closeness 32 ms against 5.9 ms, and the
 spanning tree 32 ms against 336 ms (it returns the tree in its own format,
-where networkxr builds a NetworkX graph). Converting the 200,000-node
+where networkxrs builds a NetworkX graph). Converting the 200,000-node
 NetworkX graph with rustworkx's own converter took 450 to 730 ms, against
 about 40 ms for a snapshot here. The benchmark script prints these if
 rustworkx is installed.
@@ -259,7 +258,7 @@ touches, not to the size of the graph.
 `nx.set_policy("eager")` builds a snapshot on the first accelerated call
 regardless: right when graphs are large, rarely change and are queried many
 times. `nx.set_policy("off")` sends everything to NetworkX. The environment
-variable `NETWORKXR_POLICY` sets the starting policy.
+variable `NETWORKXRS_POLICY` sets the starting policy.
 
 ## Building from source
 
@@ -269,18 +268,18 @@ Needs Rust (1.82 or newer), Python 3.12 or newer and
 ```sh
 pip install maturin pytest numpy scipy "networkx>=3.6"
 ./build.sh                     # builds an optimised wheel and installs it
-cargo test -p networkxr-core   # the Rust unit tests
+cargo test -p networkxrs-core   # the Rust unit tests
 pytest tests                   # every accelerated function against NetworkX
-python -m networkxr.conformance            # NetworkX's own tests, on networkxr
+python -m networkxrs.conformance            # NetworkX's own tests, on networkxrs
 python benchmarks/bench.py --quick
 ```
 
 ## Layout
 
 ```
-crates/networkxr-core/   the algorithms, in pure Rust; knows nothing of Python
-crates/networkxr-py/     the PyO3 bindings: builds snapshots, converts results
-python/networkxr/        the Python package: the import swap and the dispatch
+crates/networkxrs-core/   the algorithms, in pure Rust; knows nothing of Python
+crates/networkxrs-py/     the PyO3 bindings: builds snapshots, converts results
+python/networkxrs/        the Python package: the import swap and the dispatch
 tests/                   equivalence tests against NetworkX
 benchmarks/bench.py      the tables above
 docs/READING_GUIDE.md    where to start reading the Rust, and where each
@@ -296,10 +295,11 @@ in `docs/READING_GUIDE.md`.
 
 ## Before publishing
 
-- **The name.** `networkxr` is taken on PyPI (a project with the same aim, at
-  version 0.1.6 when this was written). Pick a free name and run
-  `python tools/rename.py <name>`; it changes the package, the import name,
-  the crates and the docs, and the tests pass afterwards.
+- **The name.** `networkxrs` was free on PyPI and crates.io when this was
+  written. It is one letter away from `networkxr`, an unrelated PyPI project
+  with the same aim, which this project was first named after by accident.
+  To change the name again, run `python tools/rename.py <name>`; it changes
+  the package, the import name, the crates and the docs.
 - **Repository URL.** None is set in `Cargo.toml` or `pyproject.toml`.
 - **CI.** `.github/workflows/` holds two GitHub Actions workflows. `ci.yml`
   runs the Rust and Python

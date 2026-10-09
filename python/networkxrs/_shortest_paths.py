@@ -337,7 +337,7 @@ def _shortest_path(snap, G, source=None, target=None, weight=None, method="dijks
         return _bidirectional_shortest_path(snap, source, target)
     if method == "dijkstra":
         return _bidirectional_dijkstra(snap, G, source, target, weight)[1]
-    return bellman_ford_path.__networkxr_impl__(snap, G, source, target, weight)
+    return bellman_ford_path.__networkxrs_impl__(snap, G, source, target, weight)
 
 
 @accelerate(_nx.shortest_path_length, tier=_general_tier)
@@ -360,8 +360,8 @@ def _shortest_path_length(snap, G, source=None, target=None, weight=None, method
     if method == "unweighted":
         return len(_bidirectional_shortest_path(snap, source, target)) - 1
     if method == "dijkstra":
-        return dijkstra_path_length.__networkxr_impl__(snap, G, source, target, weight)
-    return bellman_ford_path_length.__networkxr_impl__(snap, G, source, target, weight)
+        return dijkstra_path_length.__networkxrs_impl__(snap, G, source, target, weight)
+    return bellman_ford_path_length.__networkxrs_impl__(snap, G, source, target, weight)
 
 
 # With neither a source nor a target these functions return all pairs, as a

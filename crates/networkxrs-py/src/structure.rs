@@ -1,7 +1,7 @@
 //! Python methods for components, DAGs, spanning trees and cycles.
 
-use networkxr_core::dag::LongestPathsError;
-use networkxr_core::{components, cycles, dag, tree, NodeId};
+use networkxrs_core::dag::LongestPathsError;
+use networkxrs_core::{components, cycles, dag, tree, NodeId};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PySet};

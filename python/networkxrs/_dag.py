@@ -125,7 +125,7 @@ def dag_longest_paths(G, weight="weight", default_weight=1, max_paths=None):
     """Return every longest path in a directed acyclic graph.
 
     :func:`networkx.dag_longest_path` returns one longest path. This returns
-    all of them. It is an addition in networkxr; NetworkX has no equivalent.
+    all of them. It is an addition in networkxrs; NetworkX has no equivalent.
 
     The method is to negate every edge weight, compute shortest distances
     (on a DAG, one pass in topological order), and return every path whose
@@ -171,7 +171,7 @@ def dag_longest_paths(G, weight="weight", default_weight=1, max_paths=None):
 
     Examples
     --------
-    >>> import networkxr as nx
+    >>> import networkxrs as nx
     >>> G = nx.DiGraph([(0, 1), (0, 2), (1, 3), (2, 3)])
     >>> nx.dag_longest_paths(G)
     [[0, 1, 3], [0, 2, 3]]

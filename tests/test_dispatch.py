@@ -10,15 +10,15 @@ import pickle
 import networkx
 import pytest
 
-import networkxr
-from networkxr._dispatch import snapshot
+import networkxrs
+from networkxrs._dispatch import snapshot
 
 
 @pytest.fixture(autouse=True)
 def eager():
-    networkxr.set_policy("eager")
+    networkxrs.set_policy("eager")
     yield
-    networkxr.set_policy("adaptive")
+    networkxrs.set_policy("adaptive")
 
 
 def test_every_function_runs_in_rust_for_some_input():
@@ -27,13 +27,13 @@ def test_every_function_runs_in_rust_for_some_input():
     from conftest import ZOO, outcome
     from test_equivalence import CASES
 
-    networkxr.dispatch_counts(reset=True)
+    networkxrs.dispatch_counts(reset=True)
     for builder, _ in CASES.values():
         for G in ZOO.values():
             for call in builder(G):
-                outcome(call, networkxr, G)
-    counts = networkxr.dispatch_counts(reset=True)
-    never = [name for name in networkxr.accelerated() if counts.get(name, {}).get("rust", 0) == 0]
+                outcome(call, networkxrs, G)
+    counts = networkxrs.dispatch_counts(reset=True)
+    never = [name for name in networkxrs.accelerated() if counts.get(name, {}).get("rust", 0) == 0]
     assert never == []
     # Under the eager policy most calls on these plain graphs should be Rust.
     rust = sum(c["rust"] for c in counts.values())
@@ -42,16 +42,16 @@ def test_every_function_runs_in_rust_for_some_input():
 
 
 def _counts_for(name, call):
-    networkxr.dispatch_counts(reset=True)
+    networkxrs.dispatch_counts(reset=True)
     result = call()
     if hasattr(result, "__next__"):
         list(result)
-    return networkxr.dispatch_counts(reset=True).get(name, {"rust": 0, "networkx": 0})
+    return networkxrs.dispatch_counts(reset=True).get(name, {"rust": 0, "networkx": 0})
 
 
 def test_plain_graph_runs_in_rust():
     G = networkx.path_graph(5)
-    assert _counts_for("shortest_path", lambda: networkxr.shortest_path(G, 0, 4)) == {"rust": 1, "networkx": 0}
+    assert _counts_for("shortest_path", lambda: networkxrs.shortest_path(G, 0, 4)) == {"rust": 1, "networkx": 0}
 
 
 @pytest.mark.parametrize(
@@ -67,9 +67,9 @@ def test_plain_graph_runs_in_rust():
 )
 def test_unsupported_graphs_fall_back_and_agree(make):
     G = make()
-    counts = _counts_for("shortest_path_length", lambda: networkxr.shortest_path_length(G, 0))
+    counts = _counts_for("shortest_path_length", lambda: networkxrs.shortest_path_length(G, 0))
     assert counts == {"rust": 0, "networkx": 1}
-    assert networkxr.shortest_path_length(G, 0) == networkx.shortest_path_length(G, 0)
+    assert networkxrs.shortest_path_length(G, 0) == networkx.shortest_path_length(G, 0)
 
 
 @pytest.mark.parametrize(
@@ -101,9 +101,9 @@ def test_unsupported_weights_fall_back_and_agree(weight):
         except Exception as exc:  # noqa: BLE001
             return type(exc), str(exc)
 
-    assert run(networkxr) == run(networkx)
+    assert run(networkxrs) == run(networkx)
     if weight != 1.5:
-        counts = _counts_for("single_source_dijkstra_path_length", lambda: run(networkxr))
+        counts = _counts_for("single_source_dijkstra_path_length", lambda: run(networkxrs))
         assert counts == {"rust": 0, "networkx": 1}
 
 
@@ -128,16 +128,16 @@ def test_snapshot_is_rebuilt_after_every_kind_of_mutation():
         before = snapshot(G)
         mutate()
         assert snapshot(G) is not before
-        assert dict(networkxr.all_pairs_shortest_path_length(G)) == dict(networkx.all_pairs_shortest_path_length(G))
-        assert list(networkxr.connected_components(G)) == list(networkx.connected_components(G))
+        assert dict(networkxrs.all_pairs_shortest_path_length(G)) == dict(networkx.all_pairs_shortest_path_length(G))
+        assert list(networkxrs.connected_components(G)) == list(networkx.connected_components(G))
 
 
 def test_view_sees_changes_to_the_graph_it_shows():
     G = networkx.path_graph(4)
     view = G.to_undirected(as_view=True)  # shares G's adjacency dicts
-    assert networkxr.shortest_path(view, 0, 3) == [0, 1, 2, 3]
+    assert networkxrs.shortest_path(view, 0, 3) == [0, 1, 2, 3]
     G.add_edge(0, 3)
-    assert networkxr.shortest_path(view, 0, 3) == [0, 3]
+    assert networkxrs.shortest_path(view, 0, 3) == [0, 3]
 
 
 def test_subclasses_are_accelerated_only_if_they_behave_like_graph():
@@ -158,50 +158,50 @@ def test_subclasses_are_accelerated_only_if_they_behave_like_graph():
     for cls, expected in ((Tagged, True), (Quiet, False), (Complement, False)):
         G = cls([(0, 1), (1, 2)])
         assert (snapshot(G) is not None) is expected
-        assert networkxr.shortest_path(G, 0, 2) == networkx.shortest_path(G, 0, 2)
+        assert networkxrs.shortest_path(G, 0, 2) == networkx.shortest_path(G, 0, 2)
 
 
 def test_graph_with_caching_disabled_falls_back():
     G = networkx.path_graph(4)
     G.__networkx_cache__ = None  # NetworkX does this to graphs it edits directly
     assert snapshot(G) is None
-    assert networkxr.shortest_path(G, 0, 3) == [0, 1, 2, 3]
+    assert networkxrs.shortest_path(G, 0, 3) == [0, 1, 2, 3]
 
 
 def test_snapshot_is_reused_when_nothing_changes():
     G = networkx.path_graph(4)
-    networkxr.shortest_path(G, 0, 3)
+    networkxrs.shortest_path(G, 0, 3)
     first = snapshot(G)
-    networkxr.pagerank(G)
+    networkxrs.pagerank(G)
     assert snapshot(G) is first
 
 
 def test_weights_changed_in_place_are_seen_without_a_rebuild():
     G = networkx.Graph()
     G.add_weighted_edges_from([(0, 1, 1), (1, 2, 1), (0, 2, 5)])
-    assert networkxr.dijkstra_path(G, 0, 2) == [0, 1, 2]
+    assert networkxrs.dijkstra_path(G, 0, 2) == [0, 1, 2]
     before = snapshot(G)
     G[0][2]["weight"] = 1  # NetworkX does not clear its cache for this
     assert snapshot(G) is before
-    assert networkxr.dijkstra_path(G, 0, 2) == [0, 2]
+    assert networkxrs.dijkstra_path(G, 0, 2) == [0, 2]
     G.edges[0, 2]["weight"] = 10
-    assert networkxr.dijkstra_path(G, 0, 2) == [0, 1, 2]
+    assert networkxrs.dijkstra_path(G, 0, 2) == [0, 1, 2]
     del G[0][2]["weight"]  # now defaults to 1
-    assert networkxr.dijkstra_path(G, 0, 2) == [0, 2]
+    assert networkxrs.dijkstra_path(G, 0, 2) == [0, 2]
 
 
 def test_graph_with_snapshot_can_be_copied_and_pickled():
     G = networkx.path_graph(4)
-    networkxr.shortest_path(G, 0, 3)
+    networkxrs.shortest_path(G, 0, 3)
     assert snapshot(G) is not None
     for clone in (copy.deepcopy(G), pickle.loads(pickle.dumps(G)), G.copy()):
         clone.add_edge(0, 3)
-        assert networkxr.shortest_path(clone, 0, 3) == [0, 3]
-    assert networkxr.shortest_path(G, 0, 3) == [0, 1, 2, 3]
+        assert networkxrs.shortest_path(clone, 0, 3) == [0, 3]
+    assert networkxrs.shortest_path(G, 0, 3) == [0, 1, 2, 3]
     # A shallow copy shares its adjacency with the original, in NetworkX too.
     shallow = copy.copy(G)
     shallow.add_edge(0, 3)
-    assert networkxr.shortest_path(G, 0, 3) == networkx.shortest_path(G, 0, 3) == [0, 3]
+    assert networkxrs.shortest_path(G, 0, 3) == networkx.shortest_path(G, 0, 3) == [0, 3]
 
 
 def test_unknown_keyword_goes_to_networkx_and_fails_there():
@@ -209,24 +209,24 @@ def test_unknown_keyword_goes_to_networkx_and_fails_there():
     installed NetworkX an invented one is an error, and it must be
     NetworkX's error."""
     G = networkx.path_graph(4)
-    networkxr.dispatch_counts(reset=True)
-    for call in (networkxr.pagerank, networkxr.bfs_edges):
+    networkxrs.dispatch_counts(reset=True)
+    for call in (networkxrs.pagerank, networkxrs.bfs_edges):
         with pytest.raises(TypeError) as ours:
             list(call(G, invented_parameter=1) or ())
         with pytest.raises(TypeError) as theirs:
             list(getattr(networkx, call.__name__)(G, invented_parameter=1) or ())
         assert str(ours.value) == str(theirs.value)
-    counts = networkxr.dispatch_counts(reset=True)
+    counts = networkxrs.dispatch_counts(reset=True)
     assert counts["pagerank"]["rust"] == 0
 
 
 def test_backend_keyword_is_passed_to_networkx():
     G = networkx.path_graph(4)
-    counts = _counts_for("shortest_path", lambda: networkxr.shortest_path(G, 0, 3, backend=None))
+    counts = _counts_for("shortest_path", lambda: networkxrs.shortest_path(G, 0, 3, backend=None))
     assert counts == {"rust": 0, "networkx": 1}
 
 
 def test_wrapper_looks_like_the_networkx_function():
-    assert networkxr.shortest_path.__name__ == "shortest_path"
-    assert networkxr.shortest_path.__doc__ == networkx.shortest_path.__doc__
-    assert networkxr.shortest_path.__wrapped__ is networkx.shortest_path
+    assert networkxrs.shortest_path.__name__ == "shortest_path"
+    assert networkxrs.shortest_path.__doc__ == networkx.shortest_path.__doc__
+    assert networkxrs.shortest_path.__wrapped__ is networkx.shortest_path

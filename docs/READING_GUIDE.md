@@ -8,10 +8,10 @@ the earlier ones.
 `cargo doc --open` renders the `///` and `//!` comments as a website, which
 is a pleasant way to get the overview before reading the code.
 
-## 1. The algorithms: `crates/networkxr-core/src/`
+## 1. The algorithms: `crates/networkxrs-core/src/`
 
 Pure Rust. Nothing here knows about Python. Every file ends with its tests,
-which double as usage examples; run them with `cargo test -p networkxr-core`.
+which double as usage examples; run them with `cargo test -p networkxrs-core`.
 
 | Order | File | What it does | Rust it introduces |
 |---|---|---|---|
@@ -34,7 +34,7 @@ port of a NetworkX function, and the comments say which. Having the Python
 original open beside the Rust (`python -c "import networkx, inspect;
 print(inspect.getsource(networkx.bfs_edges))"`) makes both easier to read.
 
-## 2. The bindings: `crates/networkxr-py/src/`
+## 2. The bindings: `crates/networkxrs-py/src/`
 
 The layer between Python and the algorithms, written with
 [PyO3](https://pyo3.rs).
@@ -48,15 +48,15 @@ The layer between Python and the algorithms, written with
 | 5 | `shortest_paths.rs` | Python methods for shortest paths | building Python dicts and lists from Rust, closures returning `Result` |
 | 6 | `structure.rs`, `centrality.rs` | The remaining Python methods | `format!`, `as_deref` |
 
-## 3. The Python package: `python/networkxr/`
+## 3. The Python package: `python/networkxrs/`
 
 | File | What it does |
 |---|---|
 | `__init__.py` | Re-exports NetworkX, then replaces the accelerated functions |
 | `_dispatch.py` | Decides, per call, between Rust and NetworkX. Its docstring explains the policy. Read this one. |
-| `_alias.py` | Makes `import networkxr.algorithms.bipartite` work |
+| `_alias.py` | Makes `import networkxrs.algorithms.bipartite` work |
 | `_traversal.py`, `_components.py`, `_dag.py`, `_shortest_paths.py`, `_centrality.py`, `_tree.py` | One thin wrapper per accelerated function |
-| `conformance.py` | Runs NetworkX's own tests against networkxr |
+| `conformance.py` | Runs NetworkX's own tests against networkxrs |
 
 ## Things to try
 
@@ -72,6 +72,6 @@ Changing code and watching what breaks teaches more than reading.
   compile, and the error message explains why that would be a data race.
 - Add an algorithm. `networkx.descendants_at_distance` is a good first one:
   it is a few lines on top of `bfs_layers`. You need a function in
-  `traversal.rs`, a method in `crates/networkxr-py/src/traversal.rs`, a
-  wrapper in `python/networkxr/_traversal.py` and a case in
+  `traversal.rs`, a method in `crates/networkxrs-py/src/traversal.rs`, a
+  wrapper in `python/networkxrs/_traversal.py` and a case in
   `tests/test_equivalence.py`.

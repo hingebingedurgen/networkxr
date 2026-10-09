@@ -13,7 +13,7 @@
 //!
 //! CPython's own `PyDict_Next` yields *borrowed* pointers: plain addresses,
 //! with no reference count touched. We only want the addresses (see
-//! [`networkxr_core::Graph::from_edge_tokens`] for why), so the objects
+//! [`networkxrs_core::Graph::from_edge_tokens`] for why), so the objects
 //! themselves are never read.
 //!
 //! # What `unsafe` means

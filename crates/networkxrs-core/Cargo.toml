@@ -1,6 +1,6 @@
 [package]
-name = "networkxr-core"
-description = "Graph algorithms on a compact integer-indexed graph. The pure-Rust engine behind networkxr."
+name = "networkxrs-core"
+description = "Graph algorithms on a compact integer-indexed graph. The pure-Rust engine behind networkxrs."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

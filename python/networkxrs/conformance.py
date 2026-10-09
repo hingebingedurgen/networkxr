@@ -1,18 +1,18 @@
-"""Run NetworkX's own test-suite against networkxr.
+"""Run NetworkX's own test-suite against networkxrs.
 
 NetworkX ships its tests inside the installed package. They call functions
 as ``nx.shortest_path(...)`` after ``import networkx as nx``. :func:`patch`
-replaces those attributes on the ``networkx`` module with networkxr's
+replaces those attributes on the ``networkx`` module with networkxrs's
 versions, so the unmodified NetworkX tests exercise the Rust code.
 
 From the command line::
 
-    python -m networkxr.conformance            # the relevant test modules
-    python -m networkxr.conformance -x -q      # extra arguments go to pytest
+    python -m networkxrs.conformance            # the relevant test modules
+    python -m networkxrs.conformance -x -q      # extra arguments go to pytest
 
 As a pytest plugin, to run any part of NetworkX's suite::
 
-    pytest -p networkxr.conformance --pyargs networkx.algorithms
+    pytest -p networkxrs.conformance --pyargs networkx.algorithms
 """
 
 import sys
@@ -33,12 +33,12 @@ TEST_TARGETS = [
     "networkx.algorithms.tests.test_cycles",
 ]
 
-#: NetworkX tests networkxr is known not to pass, and why. They are skipped
+#: NetworkX tests networkxrs is known not to pass, and why. They are skipped
 #: whenever this module is loaded as a pytest plugin.
 KNOWN_DIFFERENCES = {
     "networkx.algorithms.tests.test_dag::TestDAG::test_topological_sort6": (
         "Adds and removes nodes while iterating over topological_sort and expects "
-        "the generator to notice. networkxr computes the whole order when the "
+        "the generator to notice. networkxrs computes the whole order when the "
         "function is called, so later changes to the graph are not seen."
     ),
 }
@@ -83,7 +83,7 @@ def main(argv=None):
     import pytest
 
     args = list(sys.argv[1:] if argv is None else argv)
-    return pytest.main(["-p", "networkxr.conformance", "--pyargs", *TEST_TARGETS, *args])
+    return pytest.main(["-p", "networkxrs.conformance", "--pyargs", *TEST_TARGETS, *args])
 
 
 if __name__ == "__main__":

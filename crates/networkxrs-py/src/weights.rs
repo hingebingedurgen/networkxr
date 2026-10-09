@@ -19,7 +19,7 @@
 
 use std::cell::{Cell, RefCell};
 
-use networkxr_core::EdgeId;
+use networkxrs_core::EdgeId;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyInt};
 

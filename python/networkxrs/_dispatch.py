@@ -48,7 +48,7 @@ Generators (``bfs_edges``, ``all_pairs_shortest_path``) are handled by
 they start out reading from NetworkX and switch to the Rust result once the
 caller has consumed enough to show it is worth computing.
 
-The effect is that networkxr should not be much slower than NetworkX on any
+The effect is that networkxrs should not be much slower than NetworkX on any
 call pattern, and is much faster whenever there is real work to do.
 :func:`set_policy` overrides all of this.
 """
@@ -79,11 +79,11 @@ __all__ = [
     "snapshot",
 ]
 
-#: name -> accelerated function, for every function networkxr replaces.
+#: name -> accelerated function, for every function networkxrs replaces.
 ACCELERATED = {}
 
 #: (function name, "rust" or "networkx") -> number of calls answered that way.
-#: See networkxr.dispatch_counts().
+#: See networkxrs.dispatch_counts().
 COUNTS = collections.Counter()
 
 # --- tiers ---------------------------------------------------------------------
@@ -102,24 +102,24 @@ def reach(source, reverse=False):
 
 _POLICIES = ("adaptive", "eager", "off")
 # The environment variable sets the starting policy without editing code.
-_policy = os.environ.get("NETWORKXR_POLICY", "adaptive")
+_policy = os.environ.get("NETWORKXRS_POLICY", "adaptive")
 if _policy not in _POLICIES:
-    raise ImportError(f"NETWORKXR_POLICY must be one of {_POLICIES}, not {_policy!r}")
+    raise ImportError(f"NETWORKXRS_POLICY must be one of {_POLICIES}, not {_policy!r}")
 
 
 def set_policy(policy):
-    """Choose when networkxr uses Rust.
+    """Choose when networkxrs uses Rust.
 
     ``"adaptive"`` (the default)
         Build a snapshot of a graph when a call, or the calls so far, justify
-        its cost. See the module docstring of ``networkxr._dispatch``.
+        its cost. See the module docstring of ``networkxrs._dispatch``.
     ``"eager"``
         Build a snapshot on the first accelerated call, whatever it is. Best
         when graphs are large, rarely change and are queried many times.
     ``"off"``
         Never use Rust. Every call goes to NetworkX.
 
-    The environment variable ``NETWORKXR_POLICY`` sets the policy a program
+    The environment variable ``NETWORKXRS_POLICY`` sets the policy a program
     starts with.
     """
     global _policy
@@ -192,13 +192,13 @@ REACH_FRACTION = 0.3
 
 # NetworkX gives every graph a dict, ``G.__networkx_cache__``, and empties it
 # whenever the graph is changed through its methods. It exists so that
-# backends can cache a converted copy of the graph. Everything networkxr
+# backends can cache a converted copy of the graph. Everything networkxrs
 # remembers about a graph lives there, so NetworkX itself discards it at the
 # right moments.
-_SNAPSHOT = "networkxr"  # a Snapshot, or False if the graph is unsupported
-_DEBT = "networkxr:debt"  # seconds NetworkX has spent on LOCAL calls
-_SIZE = "networkxr:size"  # the graph's size in units
-_EPOCH = "networkxr:epoch"  # an object identifying this state of the graph
+_SNAPSHOT = "networkxrs"  # a Snapshot, or False if the graph is unsupported
+_DEBT = "networkxrs:debt"  # seconds NetworkX has spent on LOCAL calls
+_SIZE = "networkxrs:size"  # the graph's size in units
+_EPOCH = "networkxrs:epoch"  # an object identifying this state of the graph
 
 # A subclass of Graph or DiGraph is supported only if it leaves all of these
 # alone. Overriding a reader could change what the graph *means* (NetworkX
@@ -406,7 +406,7 @@ def accelerate(nx_func, tier=GLOBAL):
                     cache[_DEBT] = cache.get(_DEBT, 0.0) + perf_counter() - start
             return nx_func(G, *args, **kwargs)
 
-        wrapper.__networkxr_impl__ = impl
+        wrapper.__networkxrs_impl__ = impl
         ACCELERATED[name] = wrapper
         return wrapper
 
@@ -520,7 +520,7 @@ def accelerate_stream(nx_func):
                 return nx_func(G, *args, **kwargs)
             return stream(G, args, kwargs)
 
-        wrapper.__networkxr_impl__ = impl
+        wrapper.__networkxrs_impl__ = impl
         ACCELERATED[name] = wrapper
         return wrapper
 

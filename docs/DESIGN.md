@@ -1,11 +1,11 @@
 # Design notes
 
-Why networkxr is built the way it is. The README says what it does; this
+Why networkxrs is built the way it is. The README says what it does; this
 says why, and records the alternatives that were turned down.
 
 ## The goal and the constraint
 
-The goal is a speed-up that needs one changed line: `import networkxr as
+The goal is a speed-up that needs one changed line: `import networkxrs as
 nx`. That fixes the constraint: for the same input, return what NetworkX
 returns. Not an equivalent answer; the same one. Real code depends, often
 without its author knowing, on which of two equally short paths comes back,
@@ -14,7 +14,7 @@ on the order of a dict's keys, on a distance being `3` and not `3.0`.
 ## Where the graph lives
 
 **Chosen: the graph stays a NetworkX graph; Rust works on a snapshot.**
-`networkxr.Graph` *is* `networkx.Graph`. The first accelerated call copies
+`networkxrs.Graph` *is* `networkx.Graph`. The first accelerated call copies
 the structure into a compact Rust form, cached on the graph.
 
 The alternative was a Rust-owned graph with Python classes imitating
@@ -144,8 +144,8 @@ Three layers, because they catch different things:
 2. `tests/test_equivalence.py`: every accelerated function, many arguments,
    about fifty graphs, strict comparison with NetworkX (types, order, error
    messages and their timing), under both policies. Catches differences.
-3. NetworkX's own test-suite with networkxr patched in
-   (`networkxr.conformance`). Catches what we did not think to test, and
+3. NetworkX's own test-suite with networkxrs patched in
+   (`networkxrs.conformance`). Catches what we did not think to test, and
    shows what a new NetworkX release changed.
 
 Layer 3 is what found the graphs whose `__networkx_cache__` is `None`, and

@@ -1,6 +1,6 @@
 //! Python methods for breadth-first and depth-first search.
 
-use networkxr_core::{traversal, Direction};
+use networkxrs_core::{traversal, Direction};
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 

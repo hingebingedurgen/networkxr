@@ -1,10 +1,10 @@
-"""Time networkxr against NetworkX (and rustworkx, if installed).
+"""Time networkxrs against NetworkX (and rustworkx, if installed).
 
     python benchmarks/bench.py            # full run, a few minutes
     python benchmarks/bench.py --quick    # smaller graphs, under a minute
     python benchmarks/bench.py --markdown # print Markdown tables
 
-The first table times single calls. Three timings are reported for networkxr:
+The first table times single calls. Three timings are reported for networkxrs:
 
 - *cold*: the first call on a graph, which includes building the Rust
   snapshot of it (if the policy decides to build one);
@@ -29,7 +29,7 @@ import time
 
 import networkx
 
-import networkxr
+import networkxrs
 
 try:
     import rustworkx
@@ -76,7 +76,7 @@ def same(a, b):
     return a == b
 
 
-# (label, graph kind, call). `m` is the module: networkx or networkxr.
+# (label, graph kind, call). `m` is the module: networkx or networkxrs.
 BENCHMARKS = [
     ("connected_components", "big", lambda m, G: m.connected_components(G)),
     ("bfs_edges", "big", lambda m, G: m.bfs_edges(G, 0)),
@@ -210,10 +210,10 @@ def main():
         G = graphs[kind]
         G.__networkx_cache__.clear()  # forget any snapshot from a previous row
         t_nx, expected = timed(lambda: call(networkx, G))
-        t_cold, actual = timed(lambda: call(networkxr, G))
-        t_warm = min(timed(lambda: call(networkxr, G))[0] for _ in range(3))
+        t_cold, actual = timed(lambda: call(networkxrs, G))
+        t_warm = min(timed(lambda: call(networkxrs, G))[0] for _ in range(3))
         if not same(actual, expected):
-            raise SystemExit(f"{label}: networkxr and NetworkX disagree")
+            raise SystemExit(f"{label}: networkxrs and NetworkX disagree")
         row = [label, f"{len(G):,}", human(t_nx), human(t_cold), human(t_warm), f"{t_nx / t_cold:.0f}x"]
         if rustworkx is not None:
             rx_call = RUSTWORKX.get(label)
@@ -229,7 +229,7 @@ def main():
         rows.append(row)
         print("  " + "  ".join(row), flush=True)
 
-    header = ["function", "nodes", "NetworkX", "networkxr cold", "networkxr warm", "speed-up (cold)"]
+    header = ["function", "nodes", "NetworkX", "networkxrs cold", "networkxrs warm", "speed-up (cold)"]
     if rustworkx is not None:
         header += ["rustworkx incl. conversion", "rustworkx"]
 
@@ -242,18 +242,18 @@ def main():
         # pattern edits the graph, and copying a large graph takes seconds.
         first, second = graphs[kind].copy(), graphs[kind].copy()
         t_nx, expected = timed(lambda: function(networkx, first, rounds))
-        t_ours, actual = timed(lambda: function(networkxr, second, rounds))
+        t_ours, actual = timed(lambda: function(networkxrs, second, rounds))
         if actual != expected:
-            raise SystemExit(f"{label}: networkxr and NetworkX disagree")
+            raise SystemExit(f"{label}: networkxrs and NetworkX disagree")
         row = [label, f"{rounds:,}", human(t_nx), human(t_ours), f"{t_nx / t_ours:.1f}x"]
         pattern_rows.append(row)
         print("  " + "  ".join(row), flush=True)
-    pattern_header = ["pattern", "calls", "NetworkX", "networkxr", "speed-up"]
+    pattern_header = ["pattern", "calls", "NetworkX", "networkxrs", "speed-up"]
 
     print()
-    print(f"networkx {networkx.__version__}, networkxr {networkxr.__networkxr_version__}, "
+    print(f"networkx {networkx.__version__}, networkxrs {networkxrs.__networkxrs_version__}, "
           f"Python {platform.python_version()}, {os.cpu_count()} CPU cores, {platform.machine()}, "
-          f"policy {networkxr.get_policy()!r}")
+          f"policy {networkxrs.get_policy()!r}")
     for table_header, table_rows in ((header, rows), (pattern_header, pattern_rows)):
         print()
         if args.markdown:

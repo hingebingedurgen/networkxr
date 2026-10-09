@@ -1,8 +1,8 @@
-//! Python bindings for `networkxr-core`, built with PyO3.
+//! Python bindings for `networkxrs-core`, built with PyO3.
 //!
-//! This crate compiles to the Python extension module `networkxr._core`. It
+//! This crate compiles to the Python extension module `networkxrs._core`. It
 //! is the boundary layer: it turns a NetworkX graph into a
-//! [`networkxr_core::Graph`], calls an algorithm, and turns the integer
+//! [`networkxrs_core::Graph`], calls an algorithm, and turns the integer
 //! results back into Python objects.
 //!
 //! # How PyO3 looks
@@ -30,8 +30,8 @@
 
 use std::sync::Mutex;
 
-use networkxr_core::shortest_paths::BellmanFordWorkspace;
-use networkxr_core::{EdgeId, Graph, NodeId, Workspace};
+use networkxrs_core::shortest_paths::BellmanFordWorkspace;
+use networkxrs_core::{EdgeId, Graph, NodeId, Workspace};
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
@@ -73,7 +73,7 @@ pub(crate) fn fallback() -> PyErr {
 /// reference, so it need not guard the object against simultaneous mutable
 /// access. The few fields that do change after construction say so in their
 /// types (`PyOnceLock`, `Mutex`).
-#[pyclass(frozen, module = "networkxr._core")]
+#[pyclass(frozen, module = "networkxrs._core")]
 pub struct Snapshot {
     pub(crate) graph: Graph,
     /// `nodes[i]` is the Python object for node `i`.
@@ -459,7 +459,7 @@ fn reaches(
     Ok(seen.len() >= limit)
 }
 
-/// The module initialiser. Python calls it on `import networkxr._core`.
+/// The module initialiser. Python calls it on `import networkxrs._core`.
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Snapshot>()?;

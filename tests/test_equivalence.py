@@ -1,8 +1,8 @@
-"""networkxr must return exactly what NetworkX returns.
+"""networkxrs must return exactly what NetworkX returns.
 
 Every accelerated function is called, with a range of arguments, on every
 graph in the zoo (see conftest.py), once through ``networkx`` and once
-through ``networkxr``. The two outcomes must match: same values, same types
+through ``networkxrs``. The two outcomes must match: same values, same types
 (int versus float), same dict and list order, and for bad input the same
 exception type and message.
 """
@@ -10,7 +10,7 @@ exception type and message.
 import pytest
 from conftest import ZOO, check, probes
 
-import networkxr
+import networkxrs
 
 #: function name -> (builder, float tolerance or None for exact)
 CASES = {}
@@ -342,7 +342,7 @@ def _(G):
 
 
 def test_every_accelerated_function_has_cases():
-    assert sorted(CASES) == networkxr.accelerated()
+    assert sorted(CASES) == networkxrs.accelerated()
 
 
 @pytest.fixture(params=["eager", "adaptive"])
@@ -350,9 +350,9 @@ def policy(request):
     """Run under both policies: "eager" sends every call it can to Rust,
     "adaptive" mixes NetworkX and Rust the way real use does, including
     generators that start in one and finish in the other."""
-    networkxr.set_policy(request.param)
+    networkxrs.set_policy(request.param)
     yield request.param
-    networkxr.set_policy("adaptive")
+    networkxrs.set_policy("adaptive")
 
 
 @pytest.mark.parametrize("name", sorted(CASES))

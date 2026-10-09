@@ -9,8 +9,8 @@
 //! methods read every weight first, then release the GIL and search in
 //! parallel.
 
-use networkxr_core::shortest_paths::{self as sp, Tree, NO_PARENT};
-use networkxr_core::NodeId;
+use networkxrs_core::shortest_paths::{self as sp, Tree, NO_PARENT};
+use networkxrs_core::NodeId;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 

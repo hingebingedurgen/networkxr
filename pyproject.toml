@@ -3,7 +3,7 @@ requires = ["maturin>=1.7,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "networkxr"
+name = "networkxrs"
 description = "A drop-in speed-up for NetworkX: the same API, with the hot algorithms running in Rust."
 readme = "README.md"
 license = "BSD-3-Clause"
@@ -35,9 +35,9 @@ dev = ["pytest>=7", "numpy>=1.25", "scipy>=1.11", "rustworkx"]
 cache-keys = [{ file = "pyproject.toml" }, { file = "Cargo.toml" }, { file = "crates/**/*.rs" }, { file = "crates/**/Cargo.toml" }]
 
 [tool.maturin]
-manifest-path = "crates/networkxr-py/Cargo.toml"
+manifest-path = "crates/networkxrs-py/Cargo.toml"
 python-source = "python"
-module-name = "networkxr._core"
+module-name = "networkxrs._core"
 features = ["pyo3/extension-module"]
 
 [tool.pytest.ini_options]

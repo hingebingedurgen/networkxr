@@ -19,8 +19,8 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
-      - run: cargo clippy -p networkxr-core --all-targets -- -D warnings
-      - run: cargo test -p networkxr-core
+      - run: cargo clippy -p networkxrs-core --all-targets -- -D warnings
+      - run: cargo test -p networkxrs-core
 
   python:
     strategy:
@@ -47,8 +47,8 @@ jobs:
         shell: bash
       # Our own tests: every accelerated function against NetworkX.
       - run: pytest tests -q
-      # NetworkX's test-suite, run against networkxr, under both policies.
-      - run: python -m networkxr.conformance -q
-      - run: python -m networkxr.conformance -q
+      # NetworkX's test-suite, run against networkxrs, under both policies.
+      - run: python -m networkxrs.conformance -q
+      - run: python -m networkxrs.conformance -q
         env:
-          NETWORKXR_POLICY: eager
+          NETWORKXRS_POLICY: eager

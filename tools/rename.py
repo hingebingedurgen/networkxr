@@ -3,7 +3,7 @@
 
     python tools/rename.py fastnx
 
-Replaces the name ``networkxr`` everywhere: the Python package, the import
+Replaces the name ``networkxrs`` everywhere: the Python package, the import
 name, the crate names, the environment variable, and every mention in the
 docs and tests. Run it from a clean checkout, then rebuild and run the tests.
 
@@ -15,7 +15,7 @@ https://crates.io before settling on it.
 import pathlib
 import sys
 
-OLD = "networkxr"
+OLD = "networkxrs"
 SKIP_DIRS = {".git", "target", "dist", "__pycache__", ".pytest_cache", ".venv"}
 TEXT_SUFFIXES = {".py", ".rs", ".toml", ".md", ".yml", ".yaml", ".txt", ".sh", ".lock", ""}
 

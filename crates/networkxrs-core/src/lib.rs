@@ -1,8 +1,8 @@
-//! # networkxr-core
+//! # networkxrs-core
 //!
 //! Graph algorithms over a compact, read-only graph whose nodes are the
 //! integers `0..n`. This crate knows nothing about Python. The Python package
-//! `networkxr` converts a NetworkX graph into a [`Graph`] (a "snapshot"), runs
+//! `networkxrs` converts a NetworkX graph into a [`Graph`] (a "snapshot"), runs
 //! an algorithm from this crate, and translates the integer results back.
 //!
 //! Every algorithm here is a port of the corresponding NetworkX function and
@@ -43,7 +43,7 @@ pub mod traversal;
 pub mod tree;
 pub mod workspace;
 
-// Re-export the most used names so callers can write `networkxr_core::Graph`
-// instead of `networkxr_core::graph::Graph`.
+// Re-export the most used names so callers can write `networkxrs_core::Graph`
+// instead of `networkxrs_core::graph::Graph`.
 pub use graph::{Csr, Direction, EdgeId, Graph, GraphError, NodeId, NO_NODE};
 pub use workspace::Workspace;

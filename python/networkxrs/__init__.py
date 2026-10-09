@@ -1,16 +1,16 @@
-"""networkxr: NetworkX, with the hot algorithms running in Rust.
+"""networkxrs: NetworkX, with the hot algorithms running in Rust.
 
 Change one line::
 
-    import networkxr as nx
+    import networkxrs as nx
 
 Everything NetworkX provides is available under the same names. The
-functions listed by :func:`networkxr.accelerated` run in Rust and return what
+functions listed by :func:`networkxrs.accelerated` run in Rust and return what
 NetworkX returns; everything else is NetworkX itself.
 
 How it works
 ------------
-Graphs are ordinary NetworkX graphs: ``networkxr.Graph is networkx.Graph``.
+Graphs are ordinary NetworkX graphs: ``networkxrs.Graph is networkx.Graph``.
 The first time an accelerated function is called on a graph, its structure
 is copied into a compact Rust snapshot, which is cached on the graph and
 discarded when the graph changes. The algorithm runs on the snapshot.
@@ -36,7 +36,7 @@ import networkx as _nx
 from networkx import *  # noqa: F401,F403
 
 from . import _alias
-from ._core import __version__ as __networkxr_version__
+from ._core import __version__ as __networkxrs_version__
 from ._dispatch import ACCELERATED as _ACCELERATED
 from ._dispatch import COUNTS as _COUNTS
 from ._dispatch import get_policy, set_policy  # noqa: F401
@@ -53,8 +53,8 @@ from ._tree import *  # noqa: F401,F403,E402
 _alias.install()
 
 # Code that checks `nx.__version__` is asking about the NetworkX API it can
-# rely on, so report NetworkX's version. networkxr's own version is
-# `__networkxr_version__`.
+# rely on, so report NetworkX's version. networkxrs's own version is
+# `__networkxrs_version__`.
 __version__ = _nx.__version__
 
 

@@ -1,7 +1,7 @@
 //! Python methods for centrality measures.
 
-use networkxr_core::centrality::{self, DegreeKind, PageRankOptions};
-use networkxr_core::{EdgeId, NodeId};
+use networkxrs_core::centrality::{self, DegreeKind, PageRankOptions};
+use networkxrs_core::{EdgeId, NodeId};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 

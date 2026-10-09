@@ -7,7 +7,7 @@ import types
 import networkx
 import pytest
 
-import networkxr
+import networkxrs
 
 
 def strict_equal(a, b, approx=None, path="result"):
@@ -66,10 +66,10 @@ def outcome(call, module, G):
 
 
 def check(call, G, approx=None):
-    """Assert networkxr and networkx agree on ``call``, results or errors."""
+    """Assert networkxrs and networkx agree on ``call``, results or errors."""
     expected = outcome(call, networkx, G)
-    actual = outcome(call, networkxr, G)
-    assert actual[0] == expected[0], f"networkx: {expected!r}\nnetworkxr: {actual!r}"
+    actual = outcome(call, networkxrs, G)
+    assert actual[0] == expected[0], f"networkx: {expected!r}\nnetworkxrs: {actual!r}"
     if expected[0] == "raise":
         assert actual[1:] == expected[1:]
     else:

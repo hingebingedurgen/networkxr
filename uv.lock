@@ -30,7 +30,7 @@ wheels = [
 ]
 
 [[package]]
-name = "networkxr"
+name = "networkxrs"
 source = { editable = "." }
 dependencies = [
     { name = "networkx" },

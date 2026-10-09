@@ -1,6 +1,6 @@
 [package]
-name = "networkxr-py"
-description = "Python bindings for networkxr-core."
+name = "networkxrs-py"
+description = "Python bindings for networkxrs-core."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,14 +8,14 @@ rust-version.workspace = true
 publish = false
 
 [lib]
-# The name of the compiled module as Python sees it: networkxr._core
+# The name of the compiled module as Python sees it: networkxrs._core
 name = "_core"
 # "cdylib" builds a C-compatible shared library, which is what a Python
 # extension module is.
 crate-type = ["cdylib"]
 
 [dependencies]
-networkxr-core = { path = "../networkxr-core" }
+networkxrs-core = { path = "../networkxrs-core" }
 # abi3-py312: build against Python's stable ABI, so one wheel per platform
 # works on every Python from 3.12 up.
 pyo3 = { version = "0.29", features = ["extension-module", "abi3-py312", "multiple-pymethods"] }
